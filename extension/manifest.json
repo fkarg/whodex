@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "whodex capture",
+  "version": "0.1.0",
+  "description": "Capture LinkedIn profile data and push it to your local whodex instance.",
+
+  "permissions": ["storage"],
+
+  "host_permissions": ["*://*.linkedin.com/*"],
+  "optional_host_permissions": ["*://*/*"],
+
+  "background": {
+    "scripts": ["src/background.js"],
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["*://*.linkedin.com/in/*"],
+      "js": ["src/content.js"]
+    }
+  ],
+
+  "options_ui": {
+    "page": "src/options.html"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "whodex@local"
+    }
+  }
+}
