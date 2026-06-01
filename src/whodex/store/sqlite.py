@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -23,28 +24,41 @@ from whodex.store.rows import (
 
 
 class SqliteLedgerStore:
-    def __init__(self, url: str = "sqlite://") -> None:
+    def __init__(self, url: str = "sqlite://", *, jsonl_dir: Path | None = None) -> None:
         self._engine = create_engine(
             url,
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
+        self._jsonl_dir = jsonl_dir
         SQLModel.metadata.create_all(self._engine)
 
     def append_observations(self, observations: Sequence[Observation]) -> None:
         with Session(self._engine) as s:
             s.add_all([mappers.obs_to_row(o) for o in observations])
             s.commit()
+        if self._jsonl_dir is not None:
+            from whodex.store.jsonl import append_jsonl
+
+            append_jsonl(self._jsonl_dir, "observations", observations)
 
     def append_interactions(self, interactions: Sequence[Interaction]) -> None:
         with Session(self._engine) as s:
             s.add_all([mappers.interaction_to_row(i) for i in interactions])
             s.commit()
+        if self._jsonl_dir is not None:
+            from whodex.store.jsonl import append_jsonl
+
+            append_jsonl(self._jsonl_dir, "interactions", interactions)
 
     def append_user_actions(self, actions: Sequence[UserAction]) -> None:
         with Session(self._engine) as s:
             s.add_all([mappers.action_to_row(a) for a in actions])
             s.commit()
+        if self._jsonl_dir is not None:
+            from whodex.store.jsonl import append_jsonl
+
+            append_jsonl(self._jsonl_dir, "user_actions", actions)
 
     def read_events(self) -> EventStream:
         with Session(self._engine) as s:
