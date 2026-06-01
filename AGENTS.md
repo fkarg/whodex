@@ -210,7 +210,8 @@ The daily loop works on real data: `whodex sync --vault <vault> --db <db>` inges
 queue`/`tui` rank reach-outs with why-now; `log_interaction`/`pin`/`snooze` work; write-back enriches notes
 without clobbering; the graph answers `who-at`; reminders/notifications dispatch; `serve` runs the loop.
 **572 Python tests + 27 node tests, full gate green.** Next: **Phase 2 — push notifiers (Telegram/email)**
-(`docs/superpowers/plans/2026-06-01-phase-2-overview.md`).
+— detailed task plan ready at `docs/superpowers/plans/2026-06-02-phase-2-push-notifiers.md` (7 tasks;
+reuses the Phase-1g Notifier/dispatch seam; Telegram bot client + email sink + cross-sink dedupe).
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
