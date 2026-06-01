@@ -163,8 +163,15 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   source contract) verified; the e2e invariant suite caught two real defects (`vault_path` strong key;
   hub `_kind` routing). *Deferred:* edges/graph-repair (1c), write-back (1d), git-based `observed_at`,
   interaction-dedup on re-sync (1c).
-- **Phase 1 next (per master plan order):** 1c graph projection + repairs + change/reminder persistence →
-  1d Obsidian write-back → 1f ingestion API → 1e Google → 1g TUI → 1h Firefox. (`...phase-1-overview.md`.)
+- **Phase 1c — Graph projection + repairs + persistence: COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1c-graph.md`) — `EdgeStore` + edge projection from wikilink refs
+  (`member_of`/`lives_in`/`located_in`/`part_of`/`hosted_at`/`organized_by`/`attended`), `unresolved_ref`/
+  `placeholder_ref` repairs, durable Change/Conflict/Reminder/Repair rows, `event_boost` wired from open
+  changes, `people_at`/`contact_points` + `whodex who-at`. 333 tests, gate green. Invariant tests caught 2
+  real defects (non-idempotent edge replace; missing change fingerprint). *Deferred:* `missing_inverse`/
+  `duplicate_entity`/`missing_note` repairs + org `employees` ingestion; centrality (Phase 5).
+- **Phase 1 next (per master plan order):** 1d Obsidian write-back → 1f ingestion API → 1e Google →
+  1g TUI → 1h Firefox. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
