@@ -18,8 +18,8 @@ from whodex.sync.hub import IngestionHub, IdentityResolver, StoreIdentityResolve
 
 @dataclass
 class App:
-    ledger: Any  # LedgerStore protocol (InMemory or SQLite)
-    projection: Any  # ProjectionStore protocol (InMemory or SQLite)
+    ledger: LedgerStore  # InMemory or SQLite, structurally
+    projection: ProjectionStore  # InMemory or SQLite, structurally
     hub: IngestionHub
     sources: list[PullSource]
     trust: dict[str, int]
@@ -44,8 +44,8 @@ def build_app(
         engine_ids = ids or UlidIdFactory()
         url = f"sqlite:///{db}"
         jsonl_dir = (vault / ".whodex" / "events") if vault is not None else None
-        ledger: Any = SqliteLedgerStore(url, jsonl_dir=jsonl_dir)
-        projection: Any = SqliteProjectionStore(url)
+        ledger: LedgerStore = SqliteLedgerStore(url, jsonl_dir=jsonl_dir)
+        projection: ProjectionStore = SqliteProjectionStore(url)
         entities = SqliteEntityStore(url, id_factory=engine_ids)
         identity: Any = StoreIdentityResolver(
             entities,
