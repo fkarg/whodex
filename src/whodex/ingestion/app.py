@@ -1,16 +1,17 @@
-"""FastAPI ingestion application (P1f-3).
+"""FastAPI ingestion application (P1f-4).
 
 Provides a thin HTTP wrapper around the shared ingestion pipeline.
-Token authentication is added in P1f-4; this module exposes no auth yet.
+Bearer-token authentication is applied to POST /ingest (P1f-4).
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime
-from typing import Protocol
+from typing import Annotated, Protocol
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from whodex.domain.clock import Clock, SystemClock
 from whodex.domain.ids import IdFactory, UlidIdFactory
@@ -22,11 +23,14 @@ from whodex.store.interfaces import (
     EntityStore,
     LedgerStore,
     ProjectionStore,
+    TokenStore,
 )
 from whodex.sync.hub import IngestionHub
 from whodex.sync.ingest import ingest_one, reproject_and_persist
 
 __all__ = ["AppLike", "create_app", "app_from"]
+
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class AppLike(Protocol):
@@ -45,6 +49,25 @@ class AppLike(Protocol):
     trust: dict[str, int]
     clock: Clock
     sources: list[PullSource]
+    tokens: TokenStore
+
+
+def _make_require_token(
+    validate: Callable[[str], bool],
+) -> Callable[[HTTPAuthorizationCredentials | None], None]:
+    """Return a FastAPI dependency that enforces Bearer-token auth.
+
+    ``validate(token) -> bool`` decides whether a presented bearer token is valid
+    (typically ``TokenStore.validate``).
+    """
+
+    def require_token(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+    ) -> None:
+        if credentials is None or not validate(credentials.credentials):
+            raise HTTPException(status_code=401, detail="Invalid or missing bearer token")
+
+    return require_token
 
 
 def create_app(
@@ -54,6 +77,7 @@ def create_app(
     projection: ProjectionStore,
     sources: Mapping[str, Source],
     trust: Mapping[str, int],
+    token_validator: Callable[[str], bool],
     clock: Clock | None = None,
     entities: EntityStore | None = None,
     edge_store: EdgeStore | None = None,
@@ -65,16 +89,25 @@ def create_app(
     ``sources`` is a registry mapping source-id strings to Source instances.
     Only sources present in this registry may be pushed via the API; unknown
     sources produce a 422 response.
+
+    ``token_validator`` is a :class:`~whodex.store.interfaces.TokenStore` (or any
+    ``Callable[[str], bool]``) used to authenticate ``POST /ingest`` requests.
     """
     _clock = clock or SystemClock()
     _ids = ids or UlidIdFactory()
-    app = FastAPI(title="whodex ingestion API", version="1f-3")
+    require_token = _make_require_token(token_validator)
+    app = FastAPI(title="whodex ingestion API", version="1f-4")
 
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post("/ingest", response_model=IngestResponse, status_code=202)
+    @app.post(
+        "/ingest",
+        response_model=IngestResponse,
+        status_code=202,
+        dependencies=[Depends(require_token)],
+    )
     def ingest(body: IngestRequest) -> IngestResponse:
         total_obs = 0
         for record in body.records:
@@ -133,6 +166,7 @@ def app_from(app_obj: AppLike) -> FastAPI:
         projection=app_obj.projection,
         sources=push_sources,
         trust=app_obj.trust,
+        token_validator=app_obj.tokens.validate,
         clock=app_obj.clock,
         entities=app_obj.entities,
         edge_store=app_obj.edges,
