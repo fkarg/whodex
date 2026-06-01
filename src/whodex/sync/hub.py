@@ -12,7 +12,10 @@ from whodex.sources.base import Source
 from whodex.store.interfaces import EntityStore, LedgerStore
 
 # strong identity keys, in resolution priority order
-_STRONG_KEYS = ("vault_uid", "linkedin_url", "google_resource", "email", "phone")
+# vault_uid and vault_path are vault-native stable identifiers;
+# vault_path is always set by ObsidianSource and must participate in
+# deduplication so that StoreIdentityResolver is idempotent across runs.
+_STRONG_KEYS = ("vault_uid", "vault_path", "linkedin_url", "google_resource", "email", "phone")
 
 
 def _strong_pairs(identity: dict[str, str]) -> list[tuple[str, str]]:
@@ -159,7 +162,13 @@ class IngestionHub:
         )
 
     def ingest(self, source: Source, record: RawRecord, *, source_run_id: str) -> IngestResult:
-        entity_id = self.identity.resolve(record.identity)
+        # Resolve kind: sources may embed a `_kind` string in the payload (e.g. ObsidianSource).
+        kind_raw = record.payload.get("_kind")
+        try:
+            kind = EntityKind(kind_raw) if kind_raw else EntityKind.person
+        except ValueError:
+            kind = EntityKind.person
+        entity_id = self.identity.resolve(record.identity, kind=kind)
         external_ref = self.identity.primary_ref(record.identity)
         obs = [
             self._finalize(
