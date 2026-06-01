@@ -278,3 +278,6 @@ O11 managed graph-repair auto-apply classes.
 - **Commits:** conventional, scoped. **Never add a `Co-Authored-By` / AI co-author trailer** (user
   preference — keep authorship clean). Branch off `main` for feature work; commit/push only when asked.
 - **Update this file** (§8 Status, §9 Decision log) as part of finishing any task.
+- **Keep `README.md` current** (user directive): whenever the CLI/config/usage surface or feature status
+  changes, update the README's install/usage/commands/status sections (it carries the user-facing
+  description + quickstart, beyond the per-increment plans).
