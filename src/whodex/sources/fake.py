@@ -18,7 +18,10 @@ class FakeSource:
     id: str = "fake"
     capabilities: Capability = Capability.PULL
     identity_keys: tuple[str, ...] = ("email", "name.full")
-    provides: tuple[FieldSpec, ...] = (FieldSpec(canonical="name.full"), FieldSpec(canonical="job.title"))
+    provides: tuple[FieldSpec, ...] = (
+        FieldSpec(canonical="name.full"),
+        FieldSpec(canonical="job.title"),
+    )
 
     def __init__(self, records: list[RawRecord]) -> None:
         self._records = records
