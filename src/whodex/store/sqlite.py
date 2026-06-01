@@ -8,13 +8,14 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from whodex.domain.enums import EntityKind
+from whodex.domain.enums import EdgeType, EntityKind
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.identity import normalize_identifier
 from whodex.domain.ids import IdFactory
-from whodex.domain.state import EntityGraphState, EntityState, EventStream
+from whodex.domain.state import Edge, EntityGraphState, EntityState, EventStream
 from whodex.store import mappers
 from whodex.store.rows import (
+    EdgeRow,
     EntityIdentifierRow,
     EntityRow,
     InteractionRow,
@@ -176,3 +177,46 @@ class SqliteProjectionStore:
         with Session(self._engine) as s:
             rows = s.exec(select(ProjectionStateRow)).all()
         return {row.entity_id: EntityState.model_validate_json(row.state_json) for row in rows}
+
+
+class SqliteEdgeStore:
+    """SQLite-backed EdgeStore. replace_edges() is a full snapshot (delete-all then insert)."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        connect_args: dict[str, object] = {"check_same_thread": False}
+        self._engine = create_engine(
+            url,
+            connect_args=connect_args,
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def replace_edges(self, edges: Sequence[Edge]) -> None:
+        with Session(self._engine) as s:
+            existing = s.exec(select(EdgeRow)).all()
+            for row in existing:
+                s.delete(row)
+            for e in edges:
+                s.add(mappers.edge_to_row(e))
+            s.commit()
+
+    def outgoing(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]:
+        with Session(self._engine) as s:
+            stmt = select(EdgeRow).where(EdgeRow.src_entity_id == entity_id)
+            if type is not None:
+                stmt = stmt.where(EdgeRow.type == type.value)
+            rows = s.exec(stmt).all()
+        return [mappers.row_to_edge(r) for r in rows]
+
+    def incoming(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]:
+        with Session(self._engine) as s:
+            stmt = select(EdgeRow).where(EdgeRow.dst_entity_id == entity_id)
+            if type is not None:
+                stmt = stmt.where(EdgeRow.type == type.value)
+            rows = s.exec(stmt).all()
+        return [mappers.row_to_edge(r) for r in rows]
+
+    def all_edges(self) -> list[Edge]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(EdgeRow)).all()
+        return [mappers.row_to_edge(r) for r in rows]

@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from whodex.domain.enums import EntityKind
+from whodex.domain.enums import EdgeType, EntityKind
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.identity import normalize_identifier
 from whodex.domain.ids import IdFactory
-from whodex.domain.state import EntityGraphState, EventStream
+from whodex.domain.state import Edge, EntityGraphState, EventStream
 from whodex.store.rows import EntityRow
 
 
@@ -93,3 +93,31 @@ class InMemoryEntityStore:
 
     def get(self, entity_id: str) -> EntityRow | None:
         return self._entities.get(entity_id)
+
+
+class InMemoryEdgeStore:
+    """In-memory EdgeStore backed by a plain list."""
+
+    def __init__(self) -> None:
+        # Keyed by (src_entity_id, dst_entity_id, type) for O(1) dedup
+        self._edges: dict[tuple[str, str, str], Edge] = {}
+
+    def replace_edges(self, edges: Sequence[Edge]) -> None:
+        self._edges = {(e.src_entity_id, e.dst_entity_id, e.type.value): e for e in edges}
+
+    def outgoing(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]:
+        return [
+            e
+            for e in self._edges.values()
+            if e.src_entity_id == entity_id and (type is None or e.type == type)
+        ]
+
+    def incoming(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]:
+        return [
+            e
+            for e in self._edges.values()
+            if e.dst_entity_id == entity_id and (type is None or e.type == type)
+        ]
+
+    def all_edges(self) -> list[Edge]:
+        return list(self._edges.values())

@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
-from whodex.domain.enums import EntityKind
+from whodex.domain.enums import EdgeType, EntityKind
 from whodex.domain.events import Interaction, Observation, UserAction
-from whodex.domain.state import EntityGraphState, EventStream
+from whodex.domain.state import Edge, EntityGraphState, EventStream
 from whodex.store.rows import EntityRow
 
 
@@ -40,3 +40,13 @@ class EntityStore(Protocol):
     def kinds(self) -> dict[str, EntityKind]: ...
 
     def get(self, entity_id: str) -> EntityRow | None: ...
+
+
+class EdgeStore(Protocol):
+    def replace_edges(self, edges: Sequence[Edge]) -> None: ...
+
+    def outgoing(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]: ...
+
+    def incoming(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]: ...
+
+    def all_edges(self) -> list[Edge]: ...

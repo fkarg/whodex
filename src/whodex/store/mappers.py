@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from whodex.domain.enums import EntityKind, InteractionKind, ObsOp, UserActionType
+from whodex.domain.enums import EdgeType, EntityKind, InteractionKind, ObsOp, UserActionType
 from whodex.domain.events import Interaction, Observation, UserAction
-from whodex.store.rows import EntityRow, InteractionRow, ObservationRow, UserActionRow
+from whodex.domain.state import Edge
+from whodex.store.rows import EdgeRow, EntityRow, InteractionRow, ObservationRow, UserActionRow
 
 
 def _utc(dt: datetime) -> datetime:
@@ -62,3 +63,22 @@ def restore_entity_row(r: EntityRow) -> EntityRow:
 
 def entity_row_kind(r: EntityRow) -> EntityKind:
     return EntityKind(r.kind)
+
+
+def edge_to_row(e: Edge) -> EdgeRow:
+    return EdgeRow(
+        id=e.id,
+        src_entity_id=e.src_entity_id,
+        dst_entity_id=e.dst_entity_id,
+        type=e.type.value,
+        weight=e.weight,
+        observed_at=e.observed_at,
+    )
+
+
+def row_to_edge(r: EdgeRow) -> Edge:
+    d = r.model_dump()
+    d["type"] = EdgeType(d["type"])
+    if d.get("observed_at") is not None:
+        d["observed_at"] = _utc(d["observed_at"])
+    return Edge(**d)

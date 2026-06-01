@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Column, UniqueConstraint
+from sqlalchemy import JSON, Column, Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -73,3 +73,18 @@ class ProjectionStateRow(SQLModel, table=True):
     __tablename__ = "projection_state"
     entity_id: str = Field(primary_key=True)
     state_json: str
+
+
+class EdgeRow(SQLModel, table=True):
+    __tablename__ = "edge"
+    __table_args__ = (
+        UniqueConstraint("src_entity_id", "dst_entity_id", "type", name="uq_edge_src_dst_type"),
+        Index("ix_edge_src_entity_id", "src_entity_id"),
+        Index("ix_edge_dst_entity_id", "dst_entity_id"),
+    )
+    id: str = Field(primary_key=True)
+    src_entity_id: str
+    dst_entity_id: str
+    type: str
+    weight: float = 1.0
+    observed_at: datetime | None = None
