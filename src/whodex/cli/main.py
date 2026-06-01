@@ -8,13 +8,40 @@ from pathlib import Path
 
 import typer
 
-from whodex.config.settings import build_app
+from whodex.config.settings import App, build_app
+from whodex.config.toml import build_app_from_settings, load_settings
 from whodex.engine.graph import people_at
 from whodex.engine.queue import priority_queue
 from whodex.engine.scoring import ScoringConfig
 from whodex.facade.serve import serve_tick
 from whodex.facade.whodex import Whodex
 from whodex.sync.engine import run_sync
+
+
+def _build(
+    *,
+    config: Path | None,
+    vault: Path | None,
+    db: Path | None,
+    demo: bool = False,
+    google_env: bool = True,
+) -> App:
+    """Shared app-builder: config file first, then explicit flags override."""
+    if config is not None:
+        settings = load_settings(toml_path=config, env=os.environ)
+        # Explicit CLI flags take precedence over config file
+        if vault is not None:
+            settings = settings.model_copy(update={"vault_path": vault})
+        if db is not None:
+            settings = settings.model_copy(update={"db_path": db})
+        return build_app_from_settings(settings)
+    return build_app(
+        demo=demo,
+        vault=vault,
+        db=db,
+        google_env=os.environ if google_env else None,
+    )
+
 
 app = typer.Typer(help="whodex — local-first people CRM")
 
@@ -33,6 +60,7 @@ def sync(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
     vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    config: Path | None = typer.Option(None, "--config", help="path to whodex.toml config file"),
     write_back: bool = typer.Option(
         False,
         "--write-back/--no-write-back",
@@ -40,7 +68,7 @@ def sync(
     ),
 ) -> None:
     """Run one sync pass and print the projected state."""
-    wiring = build_app(demo=demo, vault=vault, db=db, google_env=os.environ)
+    wiring = _build(config=config, vault=vault, db=db, demo=demo)
     report = run_sync(
         wiring.sources,
         ledger=wiring.ledger,
@@ -70,9 +98,10 @@ def queue(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
     vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    config: Path | None = typer.Option(None, "--config", help="path to whodex.toml config file"),
 ) -> None:
     """Run one sync pass, then print the ranked reach-out queue with why-now."""
-    wiring = build_app(demo=demo, vault=vault, db=db, google_env=os.environ)
+    wiring = _build(config=config, vault=vault, db=db, demo=demo)
     run_sync(
         wiring.sources,
         ledger=wiring.ledger,
@@ -105,9 +134,10 @@ def who_at(
     query: str = typer.Argument(..., help="vault path or display name of an org/location"),
     vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    config: Path | None = typer.Option(None, "--config", help="path to whodex.toml config file"),
 ) -> None:
     """List people at an organisation or location (G5)."""
-    wiring = build_app(vault=vault, db=db)
+    wiring = _build(config=config, vault=vault, db=db, google_env=False)
 
     # ------------------------------------------------------------------
     # Resolve <query> to an entity id.
@@ -153,6 +183,7 @@ def who_at(
 def serve(
     vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    config: Path | None = typer.Option(None, "--config", help="path to whodex.toml config file"),
     once: bool = typer.Option(False, "--once", help="run exactly one tick then exit"),
     interval: int = typer.Option(
         300, "--interval", help="seconds between ticks (ignored when --once)"
@@ -163,7 +194,7 @@ def serve(
     The loop is a thin wrapper around serve_tick(); the testable unit lives in
     whodex.facade.serve.  FastAPI mount and watchdog integration are deferred.
     """
-    wiring = build_app(vault=vault, db=db, google_env=os.environ)
+    wiring = _build(config=config, vault=vault, db=db)
     facade = Whodex(wiring)
 
     if once:
