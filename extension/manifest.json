@@ -25,6 +25,13 @@
     "page": "src/options.html"
   },
 
+  "web_accessible_resources": [
+    {
+      "resources": ["src/extract.js"],
+      "matches": ["*://*.linkedin.com/*"]
+    }
+  ],
+
   "browser_specific_settings": {
     "gecko": {
       "id": "whodex@local"

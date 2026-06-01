@@ -2,10 +2,83 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>whodex capture — Options</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 480px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 {
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    input[type="url"],
+    input[type="text"] {
+      width: 100%;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      margin-bottom: 1rem;
+    }
+    input:focus {
+      outline: 2px solid #0066cc;
+      outline-offset: 1px;
+    }
+    button {
+      padding: 0.45rem 1.2rem;
+      background: #0066cc;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:hover { background: #0052a3; }
+    #status {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: #2a7a2a;
+      min-height: 1.2em;
+    }
+    #status.error { color: #c00; }
+  </style>
 </head>
 <body>
-  <!-- TODO P1h-3: options form — whodex endpoint URL + API key -->
+  <h1>whodex capture — Options</h1>
+
+  <label for="endpoint">Ingestion endpoint URL</label>
+  <input
+    type="url"
+    id="endpoint"
+    placeholder="http://localhost:8000"
+    autocomplete="off"
+    spellcheck="false"
+  />
+
+  <label for="token">Bearer token</label>
+  <input
+    type="text"
+    id="token"
+    placeholder="paste token here"
+    autocomplete="off"
+    spellcheck="false"
+  />
+
+  <button id="save">Save</button>
+  <div id="status" aria-live="polite"></div>
+
   <script type="module" src="options.js"></script>
 </body>
 </html>
