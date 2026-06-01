@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -51,6 +52,16 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+def _coerce_cadence(value: object, default: int) -> int:
+    if isinstance(value, bool):  # bool is an int subclass — reject
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return default
+
+
 def score_contact(si: ScoreInput, cfg: ScoringConfig, now: datetime) -> Score:
     """Pure, explainable rank. Higher = reach out sooner. Snoozed => -inf (excluded)."""
     if si.snoozed_until is not None and si.snoozed_until > now:
@@ -99,7 +110,9 @@ def _pin_and_snooze(entity_id: str, events: EventStream) -> tuple[bool, datetime
             pinned = False
         elif a.action_type == UserActionType.snooze:
             raw = a.payload.get("until")
-            snoozed_until = datetime.fromisoformat(str(raw)) if raw is not None else None
+            if raw is not None:
+                with contextlib.suppress(ValueError, TypeError):
+                    snoozed_until = datetime.fromisoformat(str(raw))
     return pinned, snoozed_until
 
 
@@ -113,7 +126,11 @@ def build_score_inputs(
         tier_fv = state.fields.get("person.importance")
         tier = str(tier_fv.value) if tier_fv and str(tier_fv.value) in cfg.tier_weight else "loose"
         cad_fv = state.fields.get("person.cadence_days")
-        cadence_days = int(cad_fv.value) if cad_fv is not None else cfg.cadence_default[tier]
+        cadence_days = (
+            _coerce_cadence(cad_fv.value, cfg.cadence_default[tier])
+            if cad_fv is not None
+            else cfg.cadence_default[tier]
+        )
         pinned, snoozed_until = _pin_and_snooze(entity_id, events)
         inputs.append(
             ScoreInput(

@@ -83,3 +83,70 @@ def test_pin_and_snooze_from_user_actions():
     si = build_score_inputs(states, events, cfg=CFG, now=NOW)[0]
     assert si.pinned is True
     assert si.snoozed_until == datetime(2026, 4, 1, tzinfo=UTC)
+
+
+def test_malformed_cadence_falls_back_to_tier_default():
+    # "abc" is not a valid integer — should fall back to the tier default
+    states_abc = {
+        "E1": _person_state(fields={"person.cadence_days": _fv("person.cadence_days", "abc")})
+    }
+    si_abc = build_score_inputs(states_abc, EventStream(), cfg=CFG, now=NOW)[0]
+    assert si_abc.cadence_days == CFG.cadence_default["loose"]
+
+    # None value — should also fall back to the tier default
+    states_none = {
+        "E2": _person_state(
+            eid="E2",
+            fields={"person.cadence_days": _fv("person.cadence_days", None)},
+        )
+    }
+    si_none = build_score_inputs(states_none, EventStream(), cfg=CFG, now=NOW)[0]
+    assert si_none.cadence_days == CFG.cadence_default["loose"]
+
+
+def test_malformed_snooze_payload_is_ignored():
+    states = {"E1": _person_state()}
+    events = EventStream(
+        user_actions=[
+            action(
+                action_type=UserActionType.pin,
+                target_type="contact",
+                target_id="E1",
+                entity="E1",
+            ),
+            action(
+                action_type=UserActionType.snooze,
+                target_type="contact",
+                target_id="E1",
+                entity="E1",
+                payload={"until": "not-a-date"},
+            ),
+        ]
+    )
+    si = build_score_inputs(states, events, cfg=CFG, now=NOW)[0]
+    assert si.snoozed_until is None
+    assert si.pinned is True  # pin action must be unaffected
+
+
+def test_unpin_clears_pin():
+    states = {"E1": _person_state()}
+    events = EventStream(
+        user_actions=[
+            action(
+                action_type=UserActionType.pin,
+                target_type="contact",
+                target_id="E1",
+                entity="E1",
+                created=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+            action(
+                action_type=UserActionType.unpin,
+                target_type="contact",
+                target_id="E1",
+                entity="E1",
+                created=datetime(2026, 1, 2, tzinfo=UTC),
+            ),
+        ]
+    )
+    si = build_score_inputs(states, events, cfg=CFG, now=NOW)[0]
+    assert si.pinned is False
