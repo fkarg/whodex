@@ -170,8 +170,14 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   changes, `people_at`/`contact_points` + `whodex who-at`. 333 tests, gate green. Invariant tests caught 2
   real defects (non-idempotent edge replace; missing change fingerprint). *Deferred:* `missing_inverse`/
   `duplicate_entity`/`missing_note` repairs + org `employees` ingestion; centrality (Phase 5).
-- **Phase 1 next (per master plan order):** 1d Obsidian write-back → 1f ingestion API → 1e Google →
-  1g TUI → 1h Firefox. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
+- **Phase 1d — Obsidian write-back (anti-clobber): COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1d-writeback.md`) — round-trip `render_with_changes` (clean
+  diffs), `VaultFileState` persistence, pure `plan_writeback` (fill-blank, never clobber, uid-once,
+  idempotent; property-tested), `whodex sync --write-back` + echo suppression. 405 tests, gate green.
+  Dedicated review caught + fixed a vacuous echo-suppression test and an empty/scalar-`whodex.uid`
+  non-convergence bug. *Deferred:* `watchdog` daemon watch (1g), applying graph repairs to the vault.
+- **Phase 1 next (per master plan order):** 1f ingestion API (FastAPI) → 1e Google → 1g TUI →
+  1h Firefox. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
