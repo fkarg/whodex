@@ -1,0 +1,30 @@
+[importlinter]
+root_package = whodex
+
+[importlinter:contract:layers]
+name = whodex layered architecture
+type = layers
+layers =
+    whodex.cli
+    whodex.config
+    whodex.sync
+    whodex.ingestion | whodex.notifiers | whodex.tui
+    whodex.engine | whodex.projection
+    whodex.store | whodex.sources | whodex.vault
+    whodex.domain
+ignore_imports =
+    whodex.config -> *
+unmatched_ignore_imports_alerting = warn
+
+[importlinter:contract:domain-purity]
+name = domain depends on nothing internal
+type = forbidden
+source_modules = whodex.domain
+forbidden_modules =
+    whodex.store
+    whodex.sources
+    whodex.projection
+    whodex.engine
+    whodex.sync
+    whodex.cli
+    whodex.config
