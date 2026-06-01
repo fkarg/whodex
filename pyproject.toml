@@ -9,6 +9,7 @@ dependencies = [
     "sqlmodel>=0.0.21",
     "typer>=0.12",
     "python-ulid>=2.7",
+    "ruamel-yaml>=0.18",
 ]
 
 [project.scripts]
