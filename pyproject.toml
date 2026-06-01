@@ -11,6 +11,9 @@ dependencies = [
     "python-ulid>=2.7",
     "ruamel-yaml>=0.18",
     "fastapi>=0.110",
+    "httpx>=0.27",
+    "google-auth>=2.29",
+    "google-auth-oauthlib>=1.2",
 ]
 
 [project.scripts]
@@ -25,7 +28,7 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "import-linter>=2.0",
-    "httpx>=0.27",
+    "respx>=0.21",
 ]
 
 [build-system]
@@ -56,6 +59,10 @@ explicit_package_bases = true
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["google.*", "google_auth_oauthlib.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "-ra"
