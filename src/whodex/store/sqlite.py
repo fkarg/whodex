@@ -118,7 +118,7 @@ class SqliteEntityStore:
                     )
                     .on_conflict_do_nothing(index_elements=["kind", "value"])
                 )
-                s.exec(stmt)  # type: ignore[call-overload]
+                s.exec(stmt)
             s.commit()
 
     def find_by_identifiers(self, pairs: Sequence[tuple[str, str]]) -> str | None:
@@ -165,7 +165,11 @@ class SqliteProjectionStore:
             for row in existing:
                 s.delete(row)
             for entity_id, entity_state in states.items():
-                s.add(ProjectionStateRow(entity_id=entity_id, state_json=entity_state.model_dump_json()))
+                s.add(
+                    ProjectionStateRow(
+                        entity_id=entity_id, state_json=entity_state.model_dump_json()
+                    )
+                )
             s.commit()
 
     def load(self) -> EntityGraphState:

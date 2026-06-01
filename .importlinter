@@ -10,11 +10,9 @@ layers =
     whodex.sync
     whodex.ingestion | whodex.notifiers | whodex.tui
     whodex.engine | whodex.projection
-    whodex.store | whodex.sources | whodex.vault
+    whodex.store | whodex.sources
+    whodex.vault
     whodex.domain
-ignore_imports =
-    whodex.config -> *
-unmatched_ignore_imports_alerting = warn
 
 [importlinter:contract:domain-purity]
 name = domain depends on nothing internal

@@ -3,6 +3,7 @@
 Yields VaultFile objects for every .md file in a vault directory, skipping
 system/hidden folders and dotfiles.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable

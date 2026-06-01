@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -22,8 +21,8 @@ def version() -> None:
 @app.command()
 def sync(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
-    vault: Optional[Path] = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
-    db: Optional[Path] = typer.Option(None, "--db", help="path to SQLite database file"),
+    vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
 ) -> None:
     """Run one sync pass and print the projected state."""
     wiring = build_app(demo=demo, vault=vault, db=db)
@@ -48,8 +47,8 @@ def sync(
 @app.command()
 def queue(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
-    vault: Optional[Path] = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
-    db: Optional[Path] = typer.Option(None, "--db", help="path to SQLite database file"),
+    vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
 ) -> None:
     """Run one sync pass, then print the ranked reach-out queue with why-now."""
     wiring = build_app(demo=demo, vault=vault, db=db)

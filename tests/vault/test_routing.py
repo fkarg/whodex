@@ -1,4 +1,5 @@
 """Tests for whodex.vault.routing — behavioral/table-driven, no internals."""
+
 from __future__ import annotations
 
 import pytest
@@ -6,10 +7,10 @@ import pytest
 from whodex.domain.enums import EntityKind
 from whodex.vault.routing import route
 
-
 # ---------------------------------------------------------------------------
 # Routing table: (folder, type_, tags) -> EntityKind
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "folder,type_,tags,kind",
@@ -33,6 +34,7 @@ def test_routing_table(folder: str, type_: str | None, tags: list[str], kind: En
 # Subtype extraction
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "folder,type_,expected_subtype",
     [
@@ -51,6 +53,7 @@ def test_subtype(folder: str, type_: str | None, expected_subtype: str | None) -
 # Precedence invariants
 # ---------------------------------------------------------------------------
 
+
 def test_folder_beats_conflicting_type_and_tags() -> None:
     """Folder says People; type/tags say Organisation -> folder wins."""
     assert route("People", "Organisation", ["Organisation"])[0] == EntityKind.person
@@ -68,6 +71,7 @@ def test_tags_used_when_folder_and_type_unknown() -> None:
 # Default fallback
 # ---------------------------------------------------------------------------
 
+
 def test_default_is_person_when_nothing_matches() -> None:
     """When folder/type/tags give no signal, default is person."""
     assert route("Inbox", None, [])[0] == EntityKind.person
@@ -77,6 +81,7 @@ def test_default_is_person_when_nothing_matches() -> None:
 # ---------------------------------------------------------------------------
 # Nested folder paths
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "folder,kind",
@@ -95,6 +100,7 @@ def test_nested_folders_resolve_to_top_level_kind(folder: str, kind: EntityKind)
 # ---------------------------------------------------------------------------
 # Location subtypes (City, Country, Address, Region)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("loc_type", ["City", "Country", "Address", "Region"])
 def test_location_subtypes_are_preserved(loc_type: str) -> None:

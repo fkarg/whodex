@@ -9,6 +9,7 @@ subtype is always None.
 Default kind when nothing matches: ``EntityKind.person`` (most notes are
 people).
 """
+
 from __future__ import annotations
 
 from whodex.domain.enums import EntityKind

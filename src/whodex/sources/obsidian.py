@@ -6,6 +6,7 @@ RawRecord objects for ingestion into the hub.
 NOTE (deferred): observed_at uses file mtime; git-based observed_at is a
 planned follow-up (P1b-8 or later).
 """
+
 from __future__ import annotations
 
 import os
@@ -14,9 +15,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from whodex.domain.enums import Capability, InteractionKind
+from whodex.domain.enums import Capability, InteractionKind, ObsOp
 from whodex.domain.events import InteractionDraft, ObservationDraft, RawRecord
-from whodex.domain.enums import ObsOp
 from whodex.sources.base import FieldSpec
 from whodex.vault.fs import scan
 from whodex.vault.markdown import parse_note

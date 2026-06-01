@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+from collections.abc import Iterator
 from typing import Any
 
 from pydantic import BaseModel
@@ -59,18 +61,12 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     yaml_block = rest[:closing_idx]
     body = rest[closing_end:]
 
-    import io
-
     parsed = _yaml.load(io.StringIO(yaml_block))
-    if parsed is None:
-        frontmatter: dict[str, Any] = {}
-    else:
-        frontmatter = _yaml_to_plain(parsed)  # type: ignore[assignment]
-
+    frontmatter: dict[str, Any] = {} if parsed is None else _yaml_to_plain(parsed)
     return frontmatter, body
 
 
-def _iter_line_ends(text: str):
+def _iter_line_ends(text: str) -> Iterator[tuple[int, int]]:
     """Yield (start, end) byte offsets for each line in *text* (end includes the newline)."""
     start = 0
     while start < len(text):

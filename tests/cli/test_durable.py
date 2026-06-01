@@ -11,7 +11,14 @@ runner = CliRunner()
 
 def _write_person(vault: Path, name: str, **fm):
     (vault / "People").mkdir(parents=True, exist_ok=True)
-    lines = ["---", "type: Person", *(f"{k}: {v}" for k, v in fm.items()), "tags: [Person]", "---", "## Notes"]
+    lines = [
+        "---",
+        "type: Person",
+        *(f"{k}: {v}" for k, v in fm.items()),
+        "tags: [Person]",
+        "---",
+        "## Notes",
+    ]
     (vault / "People" / f"{name}.md").write_text("\n".join(lines) + "\n")
 
 

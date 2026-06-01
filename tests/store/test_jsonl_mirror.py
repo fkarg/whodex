@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import pytest
-
+from tests.conftest import action, interaction, obs
 from whodex.domain.enums import InteractionKind, UserActionType
 from whodex.store.jsonl import read_events_from_jsonl
 from whodex.store.sqlite import SqliteLedgerStore
-from tests.conftest import action, interaction, obs
 
 
 def test_jsonl_mirror_reconstructs_same_eventstream(tmp_path):

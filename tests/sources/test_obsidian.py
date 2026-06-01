@@ -2,17 +2,17 @@
 
 Behavioral / invariant tests only — no asserting internals.
 """
+
 from __future__ import annotations
 
 import textwrap
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from whodex.domain.enums import InteractionKind
 from whodex.domain.fields import is_valid_field
-
 
 # ---------------------------------------------------------------------------
 # Helpers

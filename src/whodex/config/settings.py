@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from whodex.domain.clock import Clock, SystemClock
 from whodex.domain.events import RawRecord
@@ -11,9 +10,9 @@ from whodex.domain.ids import IdFactory, UlidIdFactory
 from whodex.domain.trust import DEFAULT_TRUST
 from whodex.sources.base import PullSource
 from whodex.sources.fake import FakeSource
-from whodex.store.interfaces import LedgerStore, ProjectionStore
+from whodex.store.interfaces import EntityStore, LedgerStore, ProjectionStore
 from whodex.store.memory import InMemoryEntityStore, InMemoryLedgerStore, InMemoryProjectionStore
-from whodex.sync.hub import IngestionHub, IdentityResolver, StoreIdentityResolver
+from whodex.sync.hub import IngestionHub, StoreIdentityResolver
 
 
 @dataclass
@@ -36,32 +35,28 @@ def build_app(
 ) -> App:
     clock = clock or SystemClock()
     sources: list[PullSource] = []
+    entity_ids = ids or UlidIdFactory()
+    ledger: LedgerStore
+    projection: ProjectionStore
+    entities: EntityStore
 
     if db is not None:
         # Durable SQLite path
         from whodex.store.sqlite import SqliteEntityStore, SqliteLedgerStore, SqliteProjectionStore
 
-        engine_ids = ids or UlidIdFactory()
         url = f"sqlite:///{db}"
         jsonl_dir = (vault / ".whodex" / "events") if vault is not None else None
-        ledger: LedgerStore = SqliteLedgerStore(url, jsonl_dir=jsonl_dir)
-        projection: ProjectionStore = SqliteProjectionStore(url)
-        entities = SqliteEntityStore(url, id_factory=engine_ids)
-        identity: Any = StoreIdentityResolver(
-            entities,
-            ledger,
-            ids=UlidIdFactory(),
-            clock=clock,
-        )
-        hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
+        ledger = SqliteLedgerStore(url, jsonl_dir=jsonl_dir)
+        projection = SqliteProjectionStore(url)
+        entities = SqliteEntityStore(url, id_factory=entity_ids)
     else:
-        # In-memory path
-        entity_ids = ids or UlidIdFactory()
+        # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
         projection = InMemoryProjectionStore()
-        entities_mem = InMemoryEntityStore(UlidIdFactory())
-        identity = IdentityResolver(UlidIdFactory())
-        hub = IngestionHub(ids=entity_ids, clock=clock, identity=identity)
+        entities = InMemoryEntityStore(entity_ids)
+
+    identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
+    hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
 
     if vault is not None:
         from whodex.sources.obsidian import ObsidianSource

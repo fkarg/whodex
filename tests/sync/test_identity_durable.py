@@ -48,7 +48,8 @@ def test_resolving_same_identity_twice_does_not_duplicate_ledger_entry():
     r.resolve({"email": "a@b.com"})
     r.resolve({"email": "a@b.com"})
     creates = [
-        a for a in ledger.read_events().user_actions
+        a
+        for a in ledger.read_events().user_actions
         if a.action_type == UserActionType.entity_create
     ]
     assert len(creates) == 1

@@ -1,4 +1,4 @@
-"""SqliteProjectionStore satisfies the ProjectionStore contract + proves cross-instance durability."""
+"""SqliteProjectionStore: ProjectionStore contract + cross-instance durability."""
 
 from __future__ import annotations
 

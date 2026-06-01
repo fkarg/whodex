@@ -73,6 +73,7 @@ def _person_entity_count(vault: Path, db: Path) -> int:
 # Invariant I1 — re-sync is idempotent: no duplicate entities, zero changes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_resync_is_idempotent_no_dup_entities_and_zero_changes(tmp_path: Path) -> None:
     """I1: A second sync over the same durable DB must be a no-op.
@@ -100,6 +101,7 @@ def test_resync_is_idempotent_no_dup_entities_and_zero_changes(tmp_path: Path) -
 # Invariant I2 — entity IDs are stable across independent App instances
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_identity_stable_across_separate_runs(tmp_path: Path) -> None:
     """I2: The same durable DB must resolve to the same entity IDs in any App build.
@@ -121,14 +123,13 @@ def test_identity_stable_across_separate_runs(tmp_path: Path) -> None:
         f"removed: {set(kinds1) - set(kinds2)!r}"
     )
     # Also check kinds are unchanged (no kind reassignment)
-    assert kinds1 == kinds2, (
-        "Entity kinds changed between builds over the same DB."
-    )
+    assert kinds1 == kinds2, "Entity kinds changed between builds over the same DB."
 
 
 # ---------------------------------------------------------------------------
 # Invariant I3 — JSONL mirror and SQLite ledger project to identical state
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.e2e
 def test_state_rebuilds_identically_from_ledger_and_jsonl(tmp_path: Path) -> None:
@@ -167,6 +168,7 @@ def test_state_rebuilds_identically_from_ledger_and_jsonl(tmp_path: Path) -> Non
 # Invariant I4 — smoke: fixture parses deterministically on two fresh DBs
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.e2e
 def test_smoke_fixture_parses_all_people_deterministically(tmp_path: Path) -> None:
     """I4: Two independent fresh syncs over the same vault produce identical entity counts.
@@ -189,12 +191,6 @@ def test_smoke_fixture_parses_all_people_deterministically(tmp_path: Path) -> No
     pc2 = _person_entity_count(vault, db2)
     expected = _person_note_count(vault)
 
-    assert pc1 == expected, (
-        f"DB1 person entity count ({pc1}) != People note count ({expected})."
-    )
-    assert pc2 == expected, (
-        f"DB2 person entity count ({pc2}) != People note count ({expected})."
-    )
-    assert pc1 == pc2, (
-        f"Two fresh DBs yielded different person entity counts: {pc1} vs {pc2}."
-    )
+    assert pc1 == expected, f"DB1 person entity count ({pc1}) != People note count ({expected})."
+    assert pc2 == expected, f"DB2 person entity count ({pc2}) != People note count ({expected})."
+    assert pc1 == pc2, f"Two fresh DBs yielded different person entity counts: {pc1} vs {pc2}."
