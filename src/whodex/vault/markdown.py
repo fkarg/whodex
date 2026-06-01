@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 
 from whodex.domain.refs import EntityRef
 
@@ -106,3 +107,102 @@ def parse_note(text: str) -> ParsedNote:
     """Parse an Obsidian-style markdown note into frontmatter + body."""
     frontmatter, body = _parse_frontmatter(text)
     return ParsedNote(frontmatter=frontmatter, body=body, raw=text)
+
+
+def _extract_frontmatter_text(raw: str) -> tuple[str, str]:
+    """
+    Return (frontmatter_yaml_block, body) where *frontmatter_yaml_block* is the
+    raw YAML text between the ``---`` fences (without the fence lines themselves)
+    and *body* is everything after the closing fence, byte-verbatim.
+
+    Returns ("", raw) when no valid frontmatter block is found.
+    """
+    if not raw.startswith("---\n"):
+        return "", raw
+
+    rest = raw[4:]
+    for line_end in _iter_line_ends(rest):
+        line = rest[line_end[0] : line_end[1]]
+        stripped = line.rstrip("\n").rstrip("\r")
+        if stripped in ("---", "..."):
+            yaml_block = rest[: line_end[0]]
+            body = rest[line_end[1] :]
+            return yaml_block, body
+
+    # No closing fence → not valid frontmatter
+    return "", raw
+
+
+def _build_commented_map(changes: dict[str, Any], set_uid: str | None) -> CommentedMap:
+    """Build a fresh CommentedMap from *changes* and an optional uid."""
+    cm = CommentedMap()
+    for k, v in changes.items():
+        cm[k] = v
+    if set_uid is not None:
+        whodex_map: CommentedMap = CommentedMap()
+        whodex_map["uid"] = set_uid
+        cm["whodex"] = whodex_map
+    return cm
+
+
+def _apply_changes_to_map(
+    cm: CommentedMap,
+    changes: dict[str, Any],
+    set_uid: str | None,
+) -> None:
+    """Apply *changes* and optional uid injection to *cm* in-place."""
+    for k, v in changes.items():
+        cm[k] = v
+
+    if set_uid is None:
+        return
+
+    if "whodex" not in cm:
+        whodex_map: CommentedMap = CommentedMap()
+        whodex_map["uid"] = set_uid
+        cm["whodex"] = whodex_map
+    else:
+        existing_whodex = cm["whodex"]
+        if not isinstance(existing_whodex, dict) or "uid" not in existing_whodex:
+            if not isinstance(existing_whodex, CommentedMap):
+                existing_whodex = CommentedMap(existing_whodex)
+                cm["whodex"] = existing_whodex
+            existing_whodex["uid"] = set_uid
+
+
+def render_with_changes(
+    raw: str,
+    changes: dict[str, Any],
+    *,
+    set_uid: str | None = None,
+) -> str:
+    """Return *raw* with only the given frontmatter *changes* applied (and
+    ``whodex.uid`` set if *set_uid* is given and not already present). Body is
+    byte-verbatim. Untouched frontmatter keys keep their original formatting
+    (ruamel round-trip). If *raw* has no frontmatter and changes/uid are given,
+    a frontmatter block is created.
+    """
+    yaml_block, body = _extract_frontmatter_text(raw)
+
+    if yaml_block == "" and not raw.startswith("---\n"):
+        # No existing frontmatter
+        if changes or set_uid is not None:
+            fresh = _build_commented_map(changes, set_uid)
+            buf = io.StringIO()
+            _yaml.dump(fresh, buf)
+            return f"---\n{buf.getvalue()}---\n{raw}"
+        return raw
+
+    # Load existing YAML block with round-trip loader
+    loaded = _yaml.load(io.StringIO(yaml_block))
+    cm: CommentedMap = CommentedMap() if loaded is None else loaded
+    _apply_changes_to_map(cm, changes, set_uid)
+
+    buf = io.StringIO()
+    _yaml.dump(cm, buf)
+    return f"---\n{buf.getvalue()}---\n{body}"
+
+
+def render_note(note: ParsedNote) -> str:
+    """Re-render *note* with no changes applied (convenience wrapper)."""
+    return render_with_changes(note.raw, {})
