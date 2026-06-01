@@ -210,6 +210,20 @@ def serve(
         time.sleep(interval)
 
 
+@app.command()
+def tui(
+    vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    config: Path | None = typer.Option(None, "--config", help="path to whodex.toml config file"),
+) -> None:
+    """Launch the interactive Textual TUI (priority queue + contact detail)."""
+    from whodex.tui.app import WhodexTUI
+
+    wiring = _build(config=config, vault=vault, db=db)
+    facade = Whodex(wiring)
+    WhodexTUI(facade).run()
+
+
 @token_app.command(name="issue")
 def token_issue(
     label: str = typer.Option(..., "--label", help="Human-readable label for this token."),

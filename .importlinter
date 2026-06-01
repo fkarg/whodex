@@ -6,9 +6,10 @@ name = whodex layered architecture
 type = layers
 layers =
     whodex.cli
+    whodex.tui
     whodex.facade
     whodex.config
-    whodex.ingestion | whodex.notifiers | whodex.tui
+    whodex.ingestion | whodex.notifiers
     whodex.sync
     whodex.engine | whodex.projection
     whodex.store | whodex.sources
