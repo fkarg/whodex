@@ -27,12 +27,22 @@ def _conflict_fingerprint(entity_id: str, field: str, winner_id: str, loser: Obs
 
 
 def _pins(events: EventStream) -> dict[tuple[str, str], object]:
-    """Latest pin value per (entity, field); cleared by unpin."""
+    """Latest pin value per (entity, field); cleared by unpin.
+
+    Only processes *field-level* pin actions — i.e. those whose payload contains
+    both a ``"field"`` key and a ``"value"`` key.  Contact-level pin actions
+    (``target_type == "contact"``) are used by the scoring engine and intentionally
+    lack these payload keys; they are silently skipped here.
+    """
     pins: dict[tuple[str, str], object] = {}
     for a in sorted(events.user_actions, key=lambda x: x.created_at):
         if a.action_type == UserActionType.pin and a.entity_id:
+            if "field" not in a.payload or "value" not in a.payload:
+                continue  # contact-level pin — handled by scoring engine, skip
             pins[(a.entity_id, a.payload["field"])] = a.payload["value"]
         elif a.action_type == UserActionType.unpin and a.entity_id:
+            if "field" not in a.payload:
+                continue  # contact-level unpin — skip
             pins.pop((a.entity_id, a.payload["field"]), None)
     return pins
 

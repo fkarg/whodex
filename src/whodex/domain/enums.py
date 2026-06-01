@@ -65,6 +65,7 @@ class UserActionType(StrEnum):
     unmerge = "unmerge"
     archive = "archive"
     cadence_set = "cadence_set"
+    apply_graph_repair = "apply_graph_repair"
 
 
 class Capability(Flag):
