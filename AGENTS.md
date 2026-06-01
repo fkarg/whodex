@@ -155,8 +155,16 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   `score_contact`/`build_score_inputs` prioritization, `staleness` freshness, idempotent `generate_reminders`,
   `priority_queue` + `whodex queue`. 85 tests, gate green. *Deferred:* `event_boost` wiring from persisted
   changes, `centrality`, reminder persistence/dispatch, freshness re-check queue.
-- **Phase 1 next (suggested order):** Obsidian connector (read: vault → entities/edges/observations) →
-  Obsidian write-back (anti-clobber) → Google Contacts → ingestion API (FastAPI) → TUI → Firefox extension.
+- **Phase 1b — Durable core + Obsidian read: COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1b-durable-obsidian-read.md`) — store-backed durable identity
+  (`StoreIdentityResolver` + `EntityStore`), SQLite ledger+projection, JSONL ledger mirror, vault parser
+  (`ruamel`)/routing/`ObsidianSource` (PULL), `whodex sync/queue --vault --db`. 209 tests, gate green.
+  Invariants I1–I6 (idempotent re-sync, durable identity, replay determinism, parse fidelity, routing,
+  source contract) verified; the e2e invariant suite caught two real defects (`vault_path` strong key;
+  hub `_kind` routing). *Deferred:* edges/graph-repair (1c), write-back (1d), git-based `observed_at`,
+  interaction-dedup on re-sync (1c).
+- **Phase 1 next (per master plan order):** 1c graph projection + repairs + change/reminder persistence →
+  1d Obsidian write-back → 1f ingestion API → 1e Google → 1g TUI → 1h Firefox. (`...phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
