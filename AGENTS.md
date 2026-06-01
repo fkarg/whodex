@@ -197,8 +197,20 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   gate green, 94% cov. Full CLI: `sync`/`queue`/`who-at`/`serve`/`tui`/`token`. *Deferred/known:* scoring &
   freshness config knobs parsed but not yet threaded into the queue (stashed on `App`); Telegram/email sinks
   (Phase 2); FastAPI mount + watchdog in `serve`; TUI snapshot tests (Pilot-only for now).
-- **Phase 1 next:** 1h Firefox WebExtension (MV3, manual/E2E — outside Python CI).
-  (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
+- **Phase 1h — Firefox WebExtension (MV3): COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1h-firefox.md`) — `extension/` MV3 package (manifest, content/
+  background/options), pure node-tested core: `extractProfile`/`canonicalLinkedinUrl`/`buildRecord`/
+  `postRecord` (27 `node --test` cases), dynamic-import extractor (`web_accessible_resources`) for MV3,
+  manual-E2E README. Outside the Python gate (`extension/` ≠ `src/`); Python gate unaffected (572).
+  *Deferred:* one-command HTTP server (`whodex serve --http` / uvicorn mount), store packaging, esbuild bundling.
+
+### 🎉 Phase 1 (MVP) COMPLETE — 1a–1h all merged to `main`.
+The daily loop works on real data: `whodex sync --vault <vault> --db <db>` ingests the Obsidian vault
+(durable, idempotent) + Google (when configured) + LinkedIn-ext (via the ingestion API/extension); `whodex
+queue`/`tui` rank reach-outs with why-now; `log_interaction`/`pin`/`snooze` work; write-back enriches notes
+without clobbering; the graph answers `who-at`; reminders/notifications dispatch; `serve` runs the loop.
+**572 Python tests + 27 node tests, full gate green.** Next: **Phase 2 — push notifiers (Telegram/email)**
+(`docs/superpowers/plans/2026-06-01-phase-2-overview.md`).
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
