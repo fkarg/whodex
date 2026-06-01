@@ -4,14 +4,20 @@ from dataclasses import dataclass, field
 
 from whodex.domain.canonical import value_hash
 from whodex.domain.clock import Clock
-from whodex.domain.enums import EntityKind
-from whodex.domain.events import Observation, ObservationDraft, RawRecord
+from whodex.domain.enums import EntityKind, UserActionType
+from whodex.domain.events import Observation, ObservationDraft, RawRecord, UserAction
 from whodex.domain.fields import is_valid_field
 from whodex.domain.ids import IdFactory
 from whodex.sources.base import Source
+from whodex.store.interfaces import EntityStore, LedgerStore
 
 # strong identity keys, in resolution priority order
 _STRONG_KEYS = ("vault_uid", "linkedin_url", "google_resource", "email", "phone")
+
+
+def _strong_pairs(identity: dict[str, str]) -> list[tuple[str, str]]:
+    """Return (key, value) pairs for recognised strong keys, in priority order."""
+    return [(k, identity[k]) for k in _STRONG_KEYS if k in identity]
 
 
 class IdentityResolver:
@@ -37,6 +43,73 @@ class IdentityResolver:
         return self._by_key[ref]
 
 
+class StoreIdentityResolver:
+    """Durable identity resolver backed by an EntityStore and a LedgerStore.
+
+    Invariant I2: the same identity keys resolve to the same entity_id across
+    independent resolver instances over the same durable EntityStore (i.e. across
+    separate process runs).
+    """
+
+    def __init__(
+        self,
+        entities: EntityStore,
+        ledger: LedgerStore,
+        *,
+        ids: IdFactory,
+        clock: Clock,
+    ) -> None:
+        self._entities = entities
+        self._ledger = ledger
+        self._ids = ids
+        self._clock = clock
+
+    def primary_ref(self, identity: dict[str, str]) -> str:
+        for k in _STRONG_KEYS:
+            if k in identity:
+                return f"{k}:{identity[k].lower()}"
+        return f"unknown:{sorted(identity.items())}"
+
+    def resolve(self, identity: dict[str, str], *, kind: EntityKind = EntityKind.person) -> str:
+        pairs = _strong_pairs(identity)
+
+        # Try to find an existing entity by any of the strong identifier pairs.
+        eid = self._entities.find_by_identifiers(pairs)
+
+        if eid is not None:
+            # Entity already exists — add any new pairs so future lookups by other
+            # keys also resolve to this entity.
+            if pairs:
+                self._entities.add_identifiers(eid, pairs)
+            return eid
+
+        # Entity not found — create a new one.
+        now = self._clock.now()
+        eid = self._entities.create_entity(kind, created_at=now)
+        if pairs:
+            self._entities.add_identifiers(eid, pairs)
+
+        # Record the entity birth in the durable ledger.
+        action = UserAction(
+            id=self._ids.new(),
+            action_type=UserActionType.entity_create,
+            target_type="entity",
+            target_id=eid,
+            entity_id=eid,
+            actor="system",
+            created_at=now,
+            payload={"kind": kind.value},
+        )
+        self._ledger.append_user_actions([action])
+
+        return eid
+
+    @property
+    def kinds(self) -> dict[str, EntityKind]:
+        """Delegate to the entity store — compatible with the engine's hub.identity.kinds access."""
+        return self._entities.kinds()
+
+
 @dataclass
 class IngestResult:
     entity_id: str
@@ -44,7 +117,13 @@ class IngestResult:
 
 
 class IngestionHub:
-    def __init__(self, *, ids: IdFactory, clock: Clock, identity: IdentityResolver) -> None:
+    def __init__(
+        self,
+        *,
+        ids: IdFactory,
+        clock: Clock,
+        identity: IdentityResolver | StoreIdentityResolver,
+    ) -> None:
         self._ids = ids
         self._clock = clock
         self.identity = identity

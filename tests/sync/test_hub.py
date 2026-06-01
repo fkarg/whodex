@@ -1,16 +1,24 @@
+from datetime import UTC, datetime
+
 from tests.conftest import raw
 from whodex.domain.clock import FixedClock
 from whodex.domain.ids import SequentialIdFactory
-from whodex.sync.hub import IdentityResolver, IngestionHub
+from whodex.store.memory import InMemoryEntityStore, InMemoryLedgerStore
+from whodex.sync.hub import IngestionHub, StoreIdentityResolver
+
+_HUB_CLOCK = FixedClock(datetime(2026, 2, 1, tzinfo=UTC))
 
 
-def _hub():
-    from datetime import UTC, datetime
-
+def _hub() -> IngestionHub:
     return IngestionHub(
         ids=SequentialIdFactory("OBS"),
-        clock=FixedClock(datetime(2026, 2, 1, tzinfo=UTC)),
-        identity=IdentityResolver(SequentialIdFactory("E")),
+        clock=_HUB_CLOCK,
+        identity=StoreIdentityResolver(
+            InMemoryEntityStore(SequentialIdFactory("E")),
+            InMemoryLedgerStore(),
+            ids=SequentialIdFactory("ACT"),
+            clock=_HUB_CLOCK,
+        ),
     )
 
 
@@ -20,6 +28,8 @@ def test_hub_resolves_new_entity_and_finalizes_observations():
     from whodex.sources.fake import FakeSource
 
     result = hub.ingest(FakeSource(records=[r]), r, source_run_id="RUN-1")
+    # Entity IDs come from the EntityStore's SequentialIdFactory("E"), so first
+    # entity will be "E-00000001".
     assert result.entity_id == "E-00000001"
     assert all(o.entity_id == "E-00000001" for o in result.observations)
     assert all(o.ingested_at.year == 2026 for o in result.observations)
