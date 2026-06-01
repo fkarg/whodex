@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -46,3 +46,24 @@ class UserActionRow(SQLModel, table=True):
     payload: Any = Field(default=None, sa_column=Column(JSON))
     created_at: datetime
     actor: str = "user"
+
+
+class EntityRow(SQLModel, table=True):
+    __tablename__ = "entity"
+    id: str = Field(primary_key=True)
+    kind: str
+    subtype: str | None = None
+    created_at: datetime
+    vault_path: str | None = Field(default=None, index=True)
+    vault_uid: str | None = Field(default=None, index=True)
+    merged_into: str | None = None
+    archived: bool = False
+
+
+class EntityIdentifierRow(SQLModel, table=True):
+    __tablename__ = "entity_identifier"
+    __table_args__ = (UniqueConstraint("kind", "value", name="uq_entity_identifier_kind_value"),)
+    id: str = Field(primary_key=True)
+    entity_id: str = Field(index=True)
+    kind: str
+    value: str

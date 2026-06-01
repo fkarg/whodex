@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 
+from whodex.domain.enums import EntityKind
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.state import EntityGraphState, EventStream
+from whodex.store.rows import EntityRow
 
 
 class LedgerStore(Protocol):
@@ -17,3 +20,23 @@ class LedgerStore(Protocol):
 class ProjectionStore(Protocol):
     def save(self, states: EntityGraphState) -> None: ...
     def load(self) -> EntityGraphState: ...
+
+
+class EntityStore(Protocol):
+    def create_entity(
+        self,
+        kind: EntityKind,
+        *,
+        created_at: datetime,
+        subtype: str | None = None,
+        vault_path: str | None = None,
+        vault_uid: str | None = None,
+    ) -> str: ...
+
+    def add_identifiers(self, entity_id: str, pairs: Sequence[tuple[str, str]]) -> None: ...
+
+    def find_by_identifiers(self, pairs: Sequence[tuple[str, str]]) -> str | None: ...
+
+    def kinds(self) -> dict[str, EntityKind]: ...
+
+    def get(self, entity_id: str) -> EntityRow | None: ...

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from whodex.domain.enums import InteractionKind, ObsOp, UserActionType
+from whodex.domain.enums import EntityKind, InteractionKind, ObsOp, UserActionType
 from whodex.domain.events import Interaction, Observation, UserAction
-from whodex.store.rows import InteractionRow, ObservationRow, UserActionRow
+from whodex.store.rows import EntityRow, InteractionRow, ObservationRow, UserActionRow
 
 
 def _utc(dt: datetime) -> datetime:
@@ -51,3 +51,14 @@ def row_to_action(r: UserActionRow) -> UserAction:
     d["action_type"] = UserActionType(d["action_type"])
     d["created_at"] = _utc(d["created_at"])
     return UserAction(**d)
+
+
+def restore_entity_row(r: EntityRow) -> EntityRow:
+    """Return a copy of *r* with tz-aware ``created_at`` (SQLite strips tzinfo)."""
+    if r.created_at.tzinfo is None:
+        return r.model_copy(update={"created_at": _utc(r.created_at)})
+    return r
+
+
+def entity_row_kind(r: EntityRow) -> EntityKind:
+    return EntityKind(r.kind)
