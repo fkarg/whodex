@@ -158,3 +158,9 @@ class TokenRow(SQLModel, table=True):
     label: str
     created_at: datetime
     revoked: bool = False
+
+
+class SyncTokenRow(SQLModel, table=True):
+    __tablename__ = "sync_token"
+    source_id: str = Field(primary_key=True)
+    token: str

@@ -229,6 +229,22 @@ class InMemoryDerivedStore:
         return list(self._reminders.values())
 
 
+class InMemorySyncTokenStore:
+    """In-memory SyncTokenStore backed by a plain dict."""
+
+    def __init__(self) -> None:
+        self._store: dict[str, str] = {}
+
+    def get(self, source_id: str) -> str | None:
+        return self._store.get(source_id)
+
+    def set(self, source_id: str, token: str) -> None:
+        self._store[source_id] = token
+
+    def clear(self, source_id: str) -> None:
+        self._store.pop(source_id, None)
+
+
 class InMemoryTokenStore:
     """In-memory TokenStore.  Only the SHA-256 hash of each token is kept."""
 

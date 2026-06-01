@@ -95,6 +95,22 @@ class TokenStore(Protocol):
         ...
 
 
+class SyncTokenStore(Protocol):
+    """Tiny KV store for API sync tokens, keyed by source_id."""
+
+    def get(self, source_id: str) -> str | None:
+        """Return the stored token for *source_id*, or None if absent."""
+        ...
+
+    def set(self, source_id: str, token: str) -> None:
+        """Persist *token* for *source_id*, overwriting any previous value."""
+        ...
+
+    def clear(self, source_id: str) -> None:
+        """Remove the token for *source_id* (no-op if absent)."""
+        ...
+
+
 class DerivedStore(Protocol):
     """Full-snapshot store for derived rows (Changes, Conflicts, Repairs, Reminders).
 

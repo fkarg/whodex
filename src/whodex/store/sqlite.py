@@ -37,6 +37,7 @@ from whodex.store.rows import (
     ObservationRow,
     ProjectionStateRow,
     ReminderRow,
+    SyncTokenRow,
     TokenRow,
     UserActionRow,
     VaultFileStateRow,
@@ -410,6 +411,43 @@ class SqliteVaultStateStore:
         with Session(self._engine) as s:
             rows = s.exec(select(VaultFileStateRow)).all()
         return [mappers.row_to_vault_state(r) for r in rows]
+
+
+class SqliteSyncTokenStore:
+    """SQLite-backed SyncTokenStore.  Upserts keyed by source_id."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def get(self, source_id: str) -> str | None:
+        with Session(self._engine) as s:
+            row = s.get(SyncTokenRow, source_id)
+            return row.token if row is not None else None
+
+    def set(self, source_id: str, token: str) -> None:
+        stmt = (
+            sqlite_insert(SyncTokenRow)
+            .values(source_id=source_id, token=token)
+            .on_conflict_do_update(
+                index_elements=["source_id"],
+                set_={"token": token},
+            )
+        )
+        with Session(self._engine) as s:
+            s.exec(stmt)
+            s.commit()
+
+    def clear(self, source_id: str) -> None:
+        with Session(self._engine) as s:
+            row = s.get(SyncTokenRow, source_id)
+            if row is not None:
+                s.delete(row)
+                s.commit()
 
 
 class SqliteTokenStore:
