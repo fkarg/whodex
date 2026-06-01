@@ -182,8 +182,15 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   `reproject_and_persist` pipeline — no divergent path), `linkedin_ext` PUSH source. 458 tests, gate green,
   97% cov. A1–A6 (auth/ingest/idempotent/422) via TestClient over a durable app. *Deferred:* serving the
   app (`whodex serve` in 1g), webhook/RSS, TLS.
-- **Phase 1 next (per master plan order):** 1e Google Contacts (OAuth) → 1g TUI + serve + notifiers →
-  1h Firefox. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
+- **Phase 1e — Google Contacts (OAuth): COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1e-google.md`) — People API via injected `httpx` +
+  `GoogleTokenProvider` (OAuth refresh isolated, `respx`-mocked in CI), mapping/pagination/`nextSyncToken`
+  incremental + `EXPIRED_SYNC_TOKEN` recovery, optional wiring when `WHODEX_GOOGLE_*` env present, Google
+  loses to Obsidian by trust (60<80). 505 tests, gate green, 97% cov. **User setup** (Google Cloud OAuth
+  Desktop client + env vars) documented in the plan's "Google setup" section. *Deferred:* live OAuth in CI,
+  delete-handling, group/photo sync.
+- **Phase 1 next (per master plan order):** 1g TUI + `serve` daemon + notification dispatch + TOML config →
+  1h Firefox extension. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
