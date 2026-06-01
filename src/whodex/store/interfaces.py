@@ -14,6 +14,7 @@ from whodex.domain.state import (
     EventStream,
     GraphRepairSuggestion,
     Reminder,
+    VaultFileState,
 )
 from whodex.store.rows import EntityRow
 
@@ -58,6 +59,16 @@ class EdgeStore(Protocol):
     def incoming(self, entity_id: str, type: EdgeType | None = None) -> list[Edge]: ...
 
     def all_edges(self) -> list[Edge]: ...
+
+
+class VaultStateStore(Protocol):
+    """Upsert-by-path store for per-file vault tracking state."""
+
+    def get(self, path: str) -> VaultFileState | None: ...
+
+    def put(self, state: VaultFileState) -> None: ...
+
+    def all(self) -> list[VaultFileState]: ...
 
 
 class DerivedStore(Protocol):

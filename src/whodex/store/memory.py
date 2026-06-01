@@ -15,6 +15,7 @@ from whodex.domain.state import (
     EventStream,
     GraphRepairSuggestion,
     Reminder,
+    VaultFileState,
 )
 from whodex.store.rows import EntityRow
 
@@ -129,6 +130,22 @@ class InMemoryEdgeStore:
 
     def all_edges(self) -> list[Edge]:
         return list(self._edges.values())
+
+
+class InMemoryVaultStateStore:
+    """In-memory VaultStateStore. Upsert by path; latest put wins."""
+
+    def __init__(self) -> None:
+        self._states: dict[str, VaultFileState] = {}
+
+    def get(self, path: str) -> VaultFileState | None:
+        return self._states.get(path)
+
+    def put(self, state: VaultFileState) -> None:
+        self._states[state.path] = state
+
+    def all(self) -> list[VaultFileState]:
+        return list(self._states.values())
 
 
 class InMemoryDerivedStore:

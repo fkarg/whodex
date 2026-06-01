@@ -7,6 +7,15 @@ from sqlalchemy import JSON, Column, Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
+class VaultFileStateRow(SQLModel, table=True):
+    __tablename__ = "vault_file_state"
+    path: str = Field(primary_key=True)
+    last_content_hash: str
+    last_frontmatter_seen: Any = Field(default=None, sa_column=Column(JSON))
+    last_mtime: float
+    last_written_hash: str | None = None
+
+
 class ObservationRow(SQLModel, table=True):
     __tablename__ = "observation"
     id: str = Field(primary_key=True)

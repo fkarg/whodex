@@ -22,6 +22,7 @@ from whodex.domain.state import (
     EventStream,
     GraphRepairSuggestion,
     Reminder,
+    VaultFileState,
 )
 from whodex.store import mappers
 from whodex.store.rows import (
@@ -36,6 +37,7 @@ from whodex.store.rows import (
     ProjectionStateRow,
     ReminderRow,
     UserActionRow,
+    VaultFileStateRow,
 )
 
 
@@ -358,3 +360,51 @@ class SqliteDerivedStore:
         with Session(self._engine) as s:
             rows = s.exec(select(ReminderRow)).all()
         return [mappers.row_to_reminder(r) for r in rows]
+
+
+class SqliteVaultStateStore:
+    """SQLite-backed VaultStateStore. put() is an upsert keyed on path."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def get(self, path: str) -> VaultFileState | None:
+        with Session(self._engine) as s:
+            row = s.get(VaultFileStateRow, path)
+            if row is None:
+                return None
+            return mappers.row_to_vault_state(row)
+
+    def put(self, state: VaultFileState) -> None:
+        stmt = (
+            sqlite_insert(VaultFileStateRow)
+            .values(
+                path=state.path,
+                last_content_hash=state.last_content_hash,
+                last_frontmatter_seen=state.last_frontmatter_seen,
+                last_mtime=state.last_mtime,
+                last_written_hash=state.last_written_hash,
+            )
+            .on_conflict_do_update(
+                index_elements=["path"],
+                set_={
+                    "last_content_hash": state.last_content_hash,
+                    "last_frontmatter_seen": state.last_frontmatter_seen,
+                    "last_mtime": state.last_mtime,
+                    "last_written_hash": state.last_written_hash,
+                },
+            )
+        )
+        with Session(self._engine) as s:
+            s.exec(stmt)
+            s.commit()
+
+    def all(self) -> list[VaultFileState]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(VaultFileStateRow)).all()
+        return [mappers.row_to_vault_state(r) for r in rows]

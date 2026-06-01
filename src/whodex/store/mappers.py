@@ -13,7 +13,14 @@ from whodex.domain.enums import (
     UserActionType,
 )
 from whodex.domain.events import Interaction, Observation, UserAction
-from whodex.domain.state import Change, ConflictSuggestion, Edge, GraphRepairSuggestion, Reminder
+from whodex.domain.state import (
+    Change,
+    ConflictSuggestion,
+    Edge,
+    GraphRepairSuggestion,
+    Reminder,
+    VaultFileState,
+)
 from whodex.store.rows import (
     ChangeRow,
     ConflictSuggestionRow,
@@ -24,6 +31,7 @@ from whodex.store.rows import (
     ObservationRow,
     ReminderRow,
     UserActionRow,
+    VaultFileStateRow,
 )
 
 
@@ -190,3 +198,23 @@ def row_to_reminder(r: ReminderRow) -> Reminder:
     if d.get("why") is None:
         d["why"] = []
     return Reminder(**d)
+
+
+def vault_state_to_row(v: VaultFileState) -> VaultFileStateRow:
+    return VaultFileStateRow(
+        path=v.path,
+        last_content_hash=v.last_content_hash,
+        last_frontmatter_seen=v.last_frontmatter_seen,
+        last_mtime=v.last_mtime,
+        last_written_hash=v.last_written_hash,
+    )
+
+
+def row_to_vault_state(r: VaultFileStateRow) -> VaultFileState:
+    return VaultFileState(
+        path=r.path,
+        last_content_hash=r.last_content_hash,
+        last_frontmatter_seen=r.last_frontmatter_seen or {},
+        last_mtime=r.last_mtime,
+        last_written_hash=r.last_written_hash,
+    )

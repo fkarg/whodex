@@ -106,3 +106,22 @@ class ProjectionResult(BaseModel):
     changes: list[Change] = Field(default_factory=list)
     conflict_suggestions: list[ConflictSuggestion] = Field(default_factory=list)
     graph_repairs: list[GraphRepairSuggestion] = Field(default_factory=list)
+
+
+class VaultFileState(BaseModel):
+    """Persisted tracking state for a single vault file.
+
+    Attributes:
+        path: Relative vault path, e.g. ``"People/Jane.md"``. Primary key.
+        last_content_hash: SHA-256 hex digest of the last-seen full file content.
+        last_frontmatter_seen: Parsed frontmatter dict at time of last read.
+        last_mtime: File modification time (seconds since epoch) at last scan.
+        last_written_hash: SHA-256 hex digest of content whodex last wrote,
+            or ``None`` if whodex has never written to this file.
+    """
+
+    path: str
+    last_content_hash: str
+    last_frontmatter_seen: dict[str, Any] = Field(default_factory=dict)
+    last_mtime: float
+    last_written_hash: str | None = None
