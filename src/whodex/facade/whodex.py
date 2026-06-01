@@ -7,13 +7,15 @@ reads immediately reflect the change.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 from whodex.config.settings import App
 from whodex.domain.clock import Clock
-from whodex.domain.enums import InteractionKind, SuggestionStatus, UserActionType
+from whodex.domain.enums import InteractionKind, Significance, SuggestionStatus, UserActionType
 from whodex.domain.events import Interaction, UserAction
 from whodex.domain.ids import IdFactory, UlidIdFactory
+from whodex.domain.state import Notification
 from whodex.engine.freshness import FreshnessConfig, staleness
 from whodex.engine.graph import contact_points as _contact_points
 from whodex.engine.graph import people_at as _people_at
@@ -444,8 +446,76 @@ class Whodex:
     # Orchestration
     # ------------------------------------------------------------------
 
+    def _generate_notifications(self) -> None:
+        """Generate Notification objects from notable un-acked Changes and due Reminders.
+
+        Builds ``Notification`` objects with a stable ``dedupe_key`` so repeated
+        calls across syncs are idempotent (the store silently skips duplicates).
+        Only ``Significance.notable`` changes and all pending reminders become
+        notifications.
+        """
+        notification_store = getattr(self._app, "notifications", None)
+        if notification_store is None:
+            return
+
+        now = self._now()
+        notifications: list[Notification] = []
+
+        # Notable un-acked changes → notifications
+        for change in self._app.derived.changes():
+            if change.significance != Significance.notable:
+                continue
+            if change.seen or change.notified:
+                continue
+            fp = (
+                change.fingerprint
+                or hashlib.sha256(
+                    f"{change.entity_id}:{change.field}:{change.new_value}".encode()
+                ).hexdigest()
+            )
+            dedupe_key = f"change:{change.entity_id}:{fp}"
+            notifications.append(
+                Notification(
+                    id=self._new_id(),
+                    kind="change",
+                    entity_id=change.entity_id,
+                    payload={
+                        "field": change.field,
+                        "old_value": change.old_value,
+                        "new_value": change.new_value,
+                        "fingerprint": fp,
+                    },
+                    dedupe_key=dedupe_key,
+                    created_at=now,
+                )
+            )
+
+        # Due/pending reminders → notifications
+        for reminder in self._app.derived.reminders():
+            if reminder.due_at > now:
+                continue
+            dedupe_key = f"reminder:{reminder.entity_id}:{reminder.fingerprint}"
+            notifications.append(
+                Notification(
+                    id=self._new_id(),
+                    kind="reminder",
+                    entity_id=reminder.entity_id,
+                    payload={
+                        "reason": reminder.reason,
+                        "score": reminder.score,
+                        "why": reminder.why,
+                        "fingerprint": reminder.fingerprint,
+                    },
+                    dedupe_key=dedupe_key,
+                    created_at=now,
+                )
+            )
+
+        if notifications:
+            notification_store.append(notifications)
+
     def sync(self) -> None:
-        """Pull all configured sources and reproject."""
+        """Pull all configured sources, reproject, and generate notifications."""
         app = self._app
         run_sync(
             app.sources,
@@ -459,6 +529,7 @@ class Whodex:
             derived_store=app.derived,
             ids=self._ids,
         )
+        self._generate_notifications()
 
     def dispatch_notifications(self) -> int:
         """Dispatch pending notifications to all registered notifiers.

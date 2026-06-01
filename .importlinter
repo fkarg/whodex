@@ -5,7 +5,8 @@ root_package = whodex
 name = whodex layered architecture
 type = layers
 layers =
-    whodex.cli | whodex.facade
+    whodex.cli
+    whodex.facade
     whodex.config
     whodex.ingestion | whodex.notifiers | whodex.tui
     whodex.sync

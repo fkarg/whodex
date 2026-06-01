@@ -9,6 +9,8 @@ from whodex.domain.clock import Clock, SystemClock
 from whodex.domain.events import RawRecord
 from whodex.domain.ids import IdFactory, UlidIdFactory
 from whodex.domain.trust import DEFAULT_TRUST
+from whodex.notifiers.impls import TUINotifier
+from whodex.notifiers.interface import Notifier
 from whodex.sources.base import PullSource
 from whodex.sources.fake import FakeSource
 from whodex.store.interfaces import (
@@ -16,6 +18,7 @@ from whodex.store.interfaces import (
     EdgeStore,
     EntityStore,
     LedgerStore,
+    NotificationStore,
     ProjectionStore,
     SyncTokenStore,
     TokenStore,
@@ -26,6 +29,7 @@ from whodex.store.memory import (
     InMemoryEdgeStore,
     InMemoryEntityStore,
     InMemoryLedgerStore,
+    InMemoryNotificationStore,
     InMemoryProjectionStore,
     InMemorySyncTokenStore,
     InMemoryTokenStore,
@@ -48,6 +52,8 @@ class App:
     vault_state_store: VaultStateStore  # per-file vault tracking (echo suppression)
     tokens: TokenStore  # revocable bearer tokens
     sync_tokens: SyncTokenStore  # sync-token persistence for pull sources (e.g. Google)
+    notifications: NotificationStore  # append-only notification store (dedupe by dedupe_key)
+    notifiers: list[Notifier]  # registered notifier sinks (default: [TUINotifier()])
 
 
 def build_app(
@@ -72,6 +78,7 @@ def build_app(
     token_store: TokenStore
     sync_token_store: SyncTokenStore
 
+    notification_store: NotificationStore
     if db is not None:
         # Durable SQLite path
         from whodex.store.sqlite import (
@@ -79,6 +86,7 @@ def build_app(
             SqliteEdgeStore,
             SqliteEntityStore,
             SqliteLedgerStore,
+            SqliteNotificationStore,
             SqliteProjectionStore,
             SqliteSyncTokenStore,
             SqliteTokenStore,
@@ -95,6 +103,7 @@ def build_app(
         vault_state_store = SqliteVaultStateStore(url)
         token_store = SqliteTokenStore(url, id_factory=UlidIdFactory())
         sync_token_store = SqliteSyncTokenStore(url)
+        notification_store = SqliteNotificationStore(url)
     else:
         # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
@@ -105,6 +114,7 @@ def build_app(
         vault_state_store = InMemoryVaultStateStore()
         token_store = InMemoryTokenStore(id_factory=UlidIdFactory())
         sync_token_store = InMemorySyncTokenStore()
+        notification_store = InMemoryNotificationStore()
 
     identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
     hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
@@ -161,4 +171,6 @@ def build_app(
         vault_state_store=vault_state_store,
         tokens=token_store,
         sync_tokens=sync_token_store,
+        notifications=notification_store,
+        notifiers=[TUINotifier()],
     )

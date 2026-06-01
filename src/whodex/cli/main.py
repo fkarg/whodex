@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from whodex.config.settings import build_app
 from whodex.engine.graph import people_at
 from whodex.engine.queue import priority_queue
 from whodex.engine.scoring import ScoringConfig
+from whodex.facade.serve import serve_tick
+from whodex.facade.whodex import Whodex
 from whodex.sync.engine import run_sync
 
 app = typer.Typer(help="whodex — local-first people CRM")
@@ -144,6 +147,36 @@ def who_at(
         state = projection.get(pid)
         display = (state.display_name if state is not None else None) or pid
         typer.echo(display)
+
+
+@app.command()
+def serve(
+    vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    once: bool = typer.Option(False, "--once", help="run exactly one tick then exit"),
+    interval: int = typer.Option(
+        300, "--interval", help="seconds between ticks (ignored when --once)"
+    ),
+) -> None:
+    """Sync + dispatch notifications in a loop (or once with --once).
+
+    The loop is a thin wrapper around serve_tick(); the testable unit lives in
+    whodex.facade.serve.  FastAPI mount and watchdog integration are deferred.
+    """
+    wiring = build_app(vault=vault, db=db, google_env=os.environ)
+    facade = Whodex(wiring)
+
+    if once:
+        report = serve_tick(facade)
+        typer.echo(f"dispatched={report.notifications_dispatched} entities={report.entity_count}")
+        return
+
+    # Thin, untested loop — the testable unit is serve_tick().
+    typer.echo(f"whodex serve: polling every {interval}s (Ctrl-C to stop)")
+    while True:
+        report = serve_tick(facade)
+        typer.echo(f"dispatched={report.notifications_dispatched} entities={report.entity_count}")
+        time.sleep(interval)
 
 
 @token_app.command(name="issue")
