@@ -1,7 +1,10 @@
+import hashlib
+
 from hypothesis import given
 from hypothesis import strategies as st
 
 from tests.conftest import _t, action, obs
+from whodex.domain.canonical import canonicalize
 from whodex.domain.enums import EntityKind, Significance, UserActionType
 from whodex.domain.state import EventStream
 from whodex.domain.trust import DEFAULT_TRUST
@@ -313,3 +316,49 @@ def test_same_trust_supersession_emits_no_conflict():
     result2 = _project(stream2)
     assert len(result2.conflict_suggestions) == 1
     assert result2.conflict_suggestions[0].reason == "lower_trust_disagrees"
+
+
+# ---------------------------------------------------------------------------
+# Item 6: Change.fingerprint is stable and non-empty (Phase 1c)
+# ---------------------------------------------------------------------------
+
+
+def test_change_fingerprint_is_non_empty_and_stable():
+    """Emitted Change has a non-empty fingerprint.
+
+    Formula: sha256(entity_id|field|canonical(new_value)).
+    """
+    first = _project(
+        EventStream(observations=[obs(entity="E1", field="job.title", value="Eng", observed=_t(1))])
+    )
+    second_obs = obs(entity="E1", field="job.title", value="Staff Eng", observed=_t(5))
+    result = project(
+        EventStream(observations=[second_obs]),
+        first.states,
+        trust=DEFAULT_TRUST,
+        kinds=KINDS,
+        now=_t(10),
+    )
+
+    assert len(result.changes) == 1
+    ch = result.changes[0]
+    assert ch.fingerprint != "", "fingerprint must be non-empty"
+
+    # Verify the fingerprint formula: sha256(entity_id|field|canonical(new_value))
+    expected_key = f"E1|job.title|{canonicalize('job.title', 'Staff Eng')}"
+    expected_fp = hashlib.sha256(expected_key.encode()).hexdigest()
+    assert ch.fingerprint == expected_fp
+
+
+def test_change_fingerprint_is_stable_across_reprojection():
+    """Same value change always produces the same fingerprint (dedup key across re-syncs)."""
+    first = _project(
+        EventStream(observations=[obs(entity="E1", field="job.title", value="Eng", observed=_t(1))])
+    )
+    stream2 = EventStream(
+        observations=[obs(entity="E1", field="job.title", value="Staff Eng", observed=_t(5))]
+    )
+    result_a = project(stream2, first.states, trust=DEFAULT_TRUST, kinds=KINDS, now=_t(10))
+    result_b = project(stream2, first.states, trust=DEFAULT_TRUST, kinds=KINDS, now=_t(15))
+
+    assert result_a.changes[0].fingerprint == result_b.changes[0].fingerprint

@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from whodex.domain.enums import EdgeType, EntityKind, ReminderReason, Significance
+from whodex.domain.enums import EdgeType, EntityKind, ReminderReason, Significance, SuggestionStatus
 from whodex.domain.events import Interaction, Observation, UserAction
 
 
@@ -42,6 +42,11 @@ class Change(BaseModel):
     caused_by_observation: str
     detected_at: datetime
     significance: Significance = Significance.minor
+    # Stable dedup key: sha256(entity_id | field | canonical(new_value)).
+    # Added in Phase 1c for user-state overlay across re-syncs.
+    fingerprint: str = ""
+    seen: bool = False
+    notified: bool = False
 
 
 class ConflictSuggestion(BaseModel):
@@ -53,6 +58,7 @@ class ConflictSuggestion(BaseModel):
     reason: str
     fingerprint: str
     detected_at: datetime
+    status: SuggestionStatus = SuggestionStatus.open
 
 
 class Reminder(BaseModel):
@@ -74,6 +80,7 @@ class GraphRepairSuggestion(BaseModel):  # seam only in Phase 0
     payload: dict[str, Any] = Field(default_factory=dict)
     fingerprint: str
     detected_at: datetime
+    status: SuggestionStatus = SuggestionStatus.open
 
 
 class Edge(BaseModel):  # seam only in Phase 0

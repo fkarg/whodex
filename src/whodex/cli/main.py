@@ -33,10 +33,14 @@ def sync(
         hub=wiring.hub,
         trust=wiring.trust,
         now=wiring.clock.now(),
+        entities=wiring.entities,
+        edge_store=wiring.edges,
+        derived_store=wiring.derived,
     )
     typer.echo(
         f"ingested={report.observations_ingested} interactions={report.interactions_ingested} "
-        f"changes={report.changes} conflicts={report.conflicts}"
+        f"changes={report.changes} conflicts={report.conflicts} "
+        f"edges={report.edges} repairs={report.repairs}"
     )
     for eid, state in wiring.projection.load().items():
         typer.echo(f"- {state.display_name or eid} ({state.kind.value})")
@@ -59,12 +63,16 @@ def queue(
         hub=wiring.hub,
         trust=wiring.trust,
         now=wiring.clock.now(),
+        entities=wiring.entities,
+        edge_store=wiring.edges,
+        derived_store=wiring.derived,
     )
     ranked = priority_queue(
         wiring.projection.load(),
         wiring.ledger.read_events(),
         cfg=ScoringConfig(),
         now=wiring.clock.now(),
+        open_changes=wiring.derived.changes(),
     )
     if not ranked:
         typer.echo("(no contacts to reach out to)")

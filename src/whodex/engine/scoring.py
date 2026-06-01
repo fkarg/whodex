@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Sequence
 from datetime import datetime
 
 from pydantic import BaseModel, Field
 
 from whodex.domain.enums import EntityKind, UserActionType
-from whodex.domain.state import EntityGraphState, EventStream
+from whodex.domain.fields import field_def, is_valid_field
+from whodex.domain.state import Change, EntityGraphState, EventStream
 
 
 class ScoreInput(BaseModel):
@@ -117,7 +119,12 @@ def _pin_and_snooze(entity_id: str, events: EventStream) -> tuple[bool, datetime
 
 
 def build_score_inputs(
-    states: EntityGraphState, events: EventStream, *, cfg: ScoringConfig, now: datetime
+    states: EntityGraphState,
+    events: EventStream,
+    *,
+    cfg: ScoringConfig,
+    now: datetime,
+    open_changes: Sequence[Change] = (),
 ) -> list[ScoreInput]:
     inputs: list[ScoreInput] = []
     for entity_id, state in states.items():
@@ -132,6 +139,16 @@ def build_score_inputs(
             else cfg.cadence_default[tier]
         )
         pinned, snoozed_until = _pin_and_snooze(entity_id, events)
+        # Gather un-acked notable (volatile) open changes for this person.
+        eid = entity_id
+        notable_kinds = tuple(
+            c.field
+            for c in open_changes
+            if c.entity_id == eid
+            and not c.seen
+            and is_valid_field(c.field)
+            and field_def(c.field).volatile
+        )
         inputs.append(
             ScoreInput(
                 entity_id=entity_id,
@@ -141,6 +158,7 @@ def build_score_inputs(
                 tier=tier,
                 pinned=pinned,
                 snoozed_until=snoozed_until,
+                open_change_kinds=notable_kinds,
             )
         )
     return inputs

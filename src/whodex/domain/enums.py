@@ -85,3 +85,9 @@ class Staleness(StrEnum):
     fresh = "fresh"
     stale = "stale"
     expired = "expired"
+
+
+class SuggestionStatus(StrEnum):
+    open = "open"
+    dismissed = "dismissed"
+    resolved = "resolved"

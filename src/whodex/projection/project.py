@@ -81,6 +81,9 @@ def project(
                 and canonicalize(field, prev_fv.value) != canonicalize(field, fv.value)
             ):
                 seq += 1
+                canon_new = canonicalize(field, fv.value)
+                fp_key = f"{entity_id}|{field}|{canon_new}"
+                fingerprint = hashlib.sha256(fp_key.encode()).hexdigest()
                 result.changes.append(
                     Change(
                         id=f"CHG-{seq:06d}",
@@ -91,6 +94,7 @@ def project(
                         caused_by_observation=winner.id,
                         detected_at=now,
                         significance=_significance(field),
+                        fingerprint=fingerprint,
                     )
                 )
 

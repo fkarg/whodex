@@ -10,8 +10,20 @@ from whodex.domain.ids import IdFactory, UlidIdFactory
 from whodex.domain.trust import DEFAULT_TRUST
 from whodex.sources.base import PullSource
 from whodex.sources.fake import FakeSource
-from whodex.store.interfaces import EntityStore, LedgerStore, ProjectionStore
-from whodex.store.memory import InMemoryEntityStore, InMemoryLedgerStore, InMemoryProjectionStore
+from whodex.store.interfaces import (
+    DerivedStore,
+    EdgeStore,
+    EntityStore,
+    LedgerStore,
+    ProjectionStore,
+)
+from whodex.store.memory import (
+    InMemoryDerivedStore,
+    InMemoryEdgeStore,
+    InMemoryEntityStore,
+    InMemoryLedgerStore,
+    InMemoryProjectionStore,
+)
 from whodex.sync.hub import IngestionHub, StoreIdentityResolver
 
 
@@ -19,6 +31,9 @@ from whodex.sync.hub import IngestionHub, StoreIdentityResolver
 class App:
     ledger: LedgerStore  # InMemory or SQLite, structurally
     projection: ProjectionStore  # InMemory or SQLite, structurally
+    entities: EntityStore  # identity resolution
+    edges: EdgeStore  # graph edges
+    derived: DerivedStore  # changes, conflicts, repairs, reminders
     hub: IngestionHub
     sources: list[PullSource]
     trust: dict[str, int]
@@ -40,20 +55,33 @@ def build_app(
     projection: ProjectionStore
     entities: EntityStore
 
+    edge_store: EdgeStore
+    derived_store: DerivedStore
+
     if db is not None:
         # Durable SQLite path
-        from whodex.store.sqlite import SqliteEntityStore, SqliteLedgerStore, SqliteProjectionStore
+        from whodex.store.sqlite import (
+            SqliteDerivedStore,
+            SqliteEdgeStore,
+            SqliteEntityStore,
+            SqliteLedgerStore,
+            SqliteProjectionStore,
+        )
 
         url = f"sqlite:///{db}"
         jsonl_dir = (vault / ".whodex" / "events") if vault is not None else None
         ledger = SqliteLedgerStore(url, jsonl_dir=jsonl_dir)
         projection = SqliteProjectionStore(url)
         entities = SqliteEntityStore(url, id_factory=entity_ids)
+        edge_store = SqliteEdgeStore(url)
+        derived_store = SqliteDerivedStore(url)
     else:
         # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
         projection = InMemoryProjectionStore()
         entities = InMemoryEntityStore(entity_ids)
+        edge_store = InMemoryEdgeStore()
+        derived_store = InMemoryDerivedStore()
 
     identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
     hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
@@ -80,6 +108,9 @@ def build_app(
     return App(
         ledger=ledger,
         projection=projection,
+        entities=entities,
+        edges=edge_store,
+        derived=derived_store,
         hub=hub,
         sources=sources,
         trust=dict(DEFAULT_TRUST),
