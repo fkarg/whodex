@@ -88,3 +88,55 @@ class EdgeRow(SQLModel, table=True):
     type: str
     weight: float = 1.0
     observed_at: datetime | None = None
+
+
+class ChangeRow(SQLModel, table=True):
+    __tablename__ = "change"
+    id: str = Field(primary_key=True)
+    entity_id: str = Field(index=True)
+    field: str
+    old_value: Any = Field(default=None, sa_column=Column(JSON))
+    new_value: Any = Field(default=None, sa_column=Column(JSON))
+    caused_by_observation: str
+    detected_at: datetime
+    significance: str
+    fingerprint: str = Field(index=True)
+    seen: bool = False
+    notified: bool = False
+
+
+class ConflictSuggestionRow(SQLModel, table=True):
+    __tablename__ = "conflict_suggestion"
+    id: str = Field(primary_key=True)
+    entity_id: str = Field(index=True)
+    field: str
+    winning_observation_id: str
+    disagreeing_observation_id: str
+    reason: str
+    fingerprint: str = Field(index=True)
+    detected_at: datetime
+    status: str = "open"
+
+
+class GraphRepairSuggestionRow(SQLModel, table=True):
+    __tablename__ = "graph_repair_suggestion"
+    id: str = Field(primary_key=True)
+    repair_type: str
+    src_entity_id: str | None = Field(default=None, index=True)
+    dst_entity_id: str | None = Field(default=None, index=True)
+    payload: Any = Field(default=None, sa_column=Column(JSON))
+    fingerprint: str = Field(index=True)
+    detected_at: datetime
+    status: str = "open"
+
+
+class ReminderRow(SQLModel, table=True):
+    __tablename__ = "reminder"
+    id: str = Field(primary_key=True)
+    entity_id: str = Field(index=True)
+    due_at: datetime
+    reason: str
+    fingerprint: str = Field(index=True)
+    score: float
+    why: Any = Field(default=None, sa_column=Column(JSON))
+    created_at: datetime

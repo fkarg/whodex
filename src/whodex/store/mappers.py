@@ -2,10 +2,29 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from whodex.domain.enums import EdgeType, EntityKind, InteractionKind, ObsOp, UserActionType
+from whodex.domain.enums import (
+    EdgeType,
+    EntityKind,
+    InteractionKind,
+    ObsOp,
+    ReminderReason,
+    Significance,
+    SuggestionStatus,
+    UserActionType,
+)
 from whodex.domain.events import Interaction, Observation, UserAction
-from whodex.domain.state import Edge
-from whodex.store.rows import EdgeRow, EntityRow, InteractionRow, ObservationRow, UserActionRow
+from whodex.domain.state import Change, ConflictSuggestion, Edge, GraphRepairSuggestion, Reminder
+from whodex.store.rows import (
+    ChangeRow,
+    ConflictSuggestionRow,
+    EdgeRow,
+    EntityRow,
+    GraphRepairSuggestionRow,
+    InteractionRow,
+    ObservationRow,
+    ReminderRow,
+    UserActionRow,
+)
 
 
 def _utc(dt: datetime) -> datetime:
@@ -82,3 +101,92 @@ def row_to_edge(r: EdgeRow) -> Edge:
     if d.get("observed_at") is not None:
         d["observed_at"] = _utc(d["observed_at"])
     return Edge(**d)
+
+
+def change_to_row(c: Change) -> ChangeRow:
+    return ChangeRow(
+        id=c.id,
+        entity_id=c.entity_id,
+        field=c.field,
+        old_value=c.old_value,
+        new_value=c.new_value,
+        caused_by_observation=c.caused_by_observation,
+        detected_at=c.detected_at,
+        significance=c.significance.value,
+        fingerprint=c.fingerprint,
+        seen=c.seen,
+        notified=c.notified,
+    )
+
+
+def row_to_change(r: ChangeRow) -> Change:
+    d = r.model_dump()
+    d["significance"] = Significance(d["significance"])
+    d["detected_at"] = _utc(d["detected_at"])
+    return Change(**d)
+
+
+def conflict_to_row(c: ConflictSuggestion) -> ConflictSuggestionRow:
+    return ConflictSuggestionRow(
+        id=c.id,
+        entity_id=c.entity_id,
+        field=c.field,
+        winning_observation_id=c.winning_observation_id,
+        disagreeing_observation_id=c.disagreeing_observation_id,
+        reason=c.reason,
+        fingerprint=c.fingerprint,
+        detected_at=c.detected_at,
+        status=c.status.value,
+    )
+
+
+def row_to_conflict(r: ConflictSuggestionRow) -> ConflictSuggestion:
+    d = r.model_dump()
+    d["status"] = SuggestionStatus(d["status"])
+    d["detected_at"] = _utc(d["detected_at"])
+    return ConflictSuggestion(**d)
+
+
+def repair_to_row(g: GraphRepairSuggestion) -> GraphRepairSuggestionRow:
+    return GraphRepairSuggestionRow(
+        id=g.id,
+        repair_type=g.repair_type,
+        src_entity_id=g.src_entity_id,
+        dst_entity_id=g.dst_entity_id,
+        payload=g.payload,
+        fingerprint=g.fingerprint,
+        detected_at=g.detected_at,
+        status=g.status.value,
+    )
+
+
+def row_to_repair(r: GraphRepairSuggestionRow) -> GraphRepairSuggestion:
+    d = r.model_dump()
+    d["status"] = SuggestionStatus(d["status"])
+    d["detected_at"] = _utc(d["detected_at"])
+    if d.get("payload") is None:
+        d["payload"] = {}
+    return GraphRepairSuggestion(**d)
+
+
+def reminder_to_row(rem: Reminder) -> ReminderRow:
+    return ReminderRow(
+        id=rem.id,
+        entity_id=rem.entity_id,
+        due_at=rem.due_at,
+        reason=rem.reason.value,
+        fingerprint=rem.fingerprint,
+        score=rem.score,
+        why=rem.why,
+        created_at=rem.created_at,
+    )
+
+
+def row_to_reminder(r: ReminderRow) -> Reminder:
+    d = r.model_dump()
+    d["reason"] = ReminderReason(d["reason"])
+    d["due_at"] = _utc(d["due_at"])
+    d["created_at"] = _utc(d["created_at"])
+    if d.get("why") is None:
+        d["why"] = []
+    return Reminder(**d)

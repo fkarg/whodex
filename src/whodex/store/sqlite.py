@@ -8,19 +8,32 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from whodex.domain.enums import EdgeType, EntityKind
+from whodex.domain.enums import EdgeType, EntityKind, SuggestionStatus
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.identity import normalize_identifier
 from whodex.domain.ids import IdFactory
-from whodex.domain.state import Edge, EntityGraphState, EntityState, EventStream
+from whodex.domain.state import (
+    Change,
+    ConflictSuggestion,
+    Edge,
+    EntityGraphState,
+    EntityState,
+    EventStream,
+    GraphRepairSuggestion,
+    Reminder,
+)
 from whodex.store import mappers
 from whodex.store.rows import (
+    ChangeRow,
+    ConflictSuggestionRow,
     EdgeRow,
     EntityIdentifierRow,
     EntityRow,
+    GraphRepairSuggestionRow,
     InteractionRow,
     ObservationRow,
     ProjectionStateRow,
+    ReminderRow,
     UserActionRow,
 )
 
@@ -220,3 +233,126 @@ class SqliteEdgeStore:
         with Session(self._engine) as s:
             rows = s.exec(select(EdgeRow)).all()
         return [mappers.row_to_edge(r) for r in rows]
+
+
+class SqliteDerivedStore:
+    """SQLite-backed DerivedStore. Full-snapshot semantics with user-state overlay."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def replace_changes(
+        self,
+        changes: Sequence[Change],
+        *,
+        acked_fingerprints: set[str] | None = None,
+    ) -> None:
+        acked = acked_fingerprints or set()
+        with Session(self._engine) as s:
+            # Load existing user state keyed by fingerprint
+            existing: dict[str, ChangeRow] = {
+                r.fingerprint: r for r in s.exec(select(ChangeRow)).all()
+            }
+            for row in existing.values():
+                s.delete(row)
+            for c in changes:
+                fp = c.fingerprint
+                prev = existing.get(fp)
+                seen = c.seen
+                notified = c.notified
+                if prev is not None and (prev.seen or prev.notified):
+                    seen = prev.seen
+                    notified = prev.notified
+                elif fp in acked:
+                    seen = True
+                row = mappers.change_to_row(c)
+                row.seen = seen
+                row.notified = notified
+                s.add(row)
+            s.commit()
+
+    def replace_conflicts(
+        self,
+        conflicts: Sequence[ConflictSuggestion],
+        *,
+        dismissed_fingerprints: set[str] | None = None,
+    ) -> None:
+        dismissed = dismissed_fingerprints or set()
+        with Session(self._engine) as s:
+            existing: dict[str, ConflictSuggestionRow] = {
+                r.fingerprint: r for r in s.exec(select(ConflictSuggestionRow)).all()
+            }
+            for row in existing.values():
+                s.delete(row)
+            for c in conflicts:
+                fp = c.fingerprint
+                prev = existing.get(fp)
+                status = c.status
+                if prev is not None and prev.status != SuggestionStatus.open.value:
+                    status = SuggestionStatus(prev.status)
+                elif fp in dismissed:
+                    status = SuggestionStatus.dismissed
+                row = mappers.conflict_to_row(c)
+                row.status = status.value
+                s.add(row)
+            s.commit()
+
+    def replace_repairs(
+        self,
+        repairs: Sequence[GraphRepairSuggestion],
+        *,
+        dismissed_fingerprints: set[str] | None = None,
+    ) -> None:
+        dismissed = dismissed_fingerprints or set()
+        with Session(self._engine) as s:
+            existing: dict[str, GraphRepairSuggestionRow] = {
+                r.fingerprint: r for r in s.exec(select(GraphRepairSuggestionRow)).all()
+            }
+            for row in existing.values():
+                s.delete(row)
+            for r in repairs:
+                fp = r.fingerprint
+                prev = existing.get(fp)
+                status = r.status
+                if prev is not None and prev.status != SuggestionStatus.open.value:
+                    status = SuggestionStatus(prev.status)
+                elif fp in dismissed:
+                    status = SuggestionStatus.dismissed
+                row = mappers.repair_to_row(r)
+                row.status = status.value
+                s.add(row)
+            s.commit()
+
+    def replace_reminders(self, reminders: Sequence[Reminder]) -> None:
+        with Session(self._engine) as s:
+            existing = s.exec(select(ReminderRow)).all()
+            for row in existing:
+                s.delete(row)
+            for rem in reminders:
+                s.add(mappers.reminder_to_row(rem))
+            s.commit()
+
+    def changes(self) -> list[Change]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(ChangeRow)).all()
+        return [mappers.row_to_change(r) for r in rows]
+
+    def conflicts(self) -> list[ConflictSuggestion]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(ConflictSuggestionRow)).all()
+        return [mappers.row_to_conflict(r) for r in rows]
+
+    def repairs(self) -> list[GraphRepairSuggestion]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(GraphRepairSuggestionRow)).all()
+        return [mappers.row_to_repair(r) for r in rows]
+
+    def reminders(self) -> list[Reminder]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(ReminderRow)).all()
+        return [mappers.row_to_reminder(r) for r in rows]

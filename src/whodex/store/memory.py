@@ -3,11 +3,19 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from whodex.domain.enums import EdgeType, EntityKind
+from whodex.domain.enums import EdgeType, EntityKind, SuggestionStatus
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.identity import normalize_identifier
 from whodex.domain.ids import IdFactory
-from whodex.domain.state import Edge, EntityGraphState, EventStream
+from whodex.domain.state import (
+    Change,
+    ConflictSuggestion,
+    Edge,
+    EntityGraphState,
+    EventStream,
+    GraphRepairSuggestion,
+    Reminder,
+)
 from whodex.store.rows import EntityRow
 
 
@@ -121,3 +129,83 @@ class InMemoryEdgeStore:
 
     def all_edges(self) -> list[Edge]:
         return list(self._edges.values())
+
+
+class InMemoryDerivedStore:
+    """In-memory DerivedStore. Full-snapshot semantics with user-state overlay."""
+
+    def __init__(self) -> None:
+        self._changes: dict[str, Change] = {}  # fingerprint -> Change
+        self._conflicts: dict[str, ConflictSuggestion] = {}  # fingerprint -> ConflictSuggestion
+        self._repairs: dict[str, GraphRepairSuggestion] = {}  # fingerprint -> GraphRepairSuggestion
+        self._reminders: dict[str, Reminder] = {}  # fingerprint -> Reminder
+
+    def replace_changes(
+        self,
+        changes: Sequence[Change],
+        *,
+        acked_fingerprints: set[str] | None = None,
+    ) -> None:
+        acked = acked_fingerprints or set()
+        new: dict[str, Change] = {}
+        for c in changes:
+            fp = c.fingerprint
+            prev = self._changes.get(fp)
+            if prev is not None and (prev.seen or prev.notified):
+                # Preserve existing user state
+                c = c.model_copy(update={"seen": prev.seen, "notified": prev.notified})
+            elif fp in acked:
+                c = c.model_copy(update={"seen": True})
+            new[fp] = c
+        self._changes = new
+
+    def replace_conflicts(
+        self,
+        conflicts: Sequence[ConflictSuggestion],
+        *,
+        dismissed_fingerprints: set[str] | None = None,
+    ) -> None:
+        dismissed = dismissed_fingerprints or set()
+        new: dict[str, ConflictSuggestion] = {}
+        for c in conflicts:
+            fp = c.fingerprint
+            prev = self._conflicts.get(fp)
+            if prev is not None and prev.status != SuggestionStatus.open:
+                c = c.model_copy(update={"status": prev.status})
+            elif fp in dismissed:
+                c = c.model_copy(update={"status": SuggestionStatus.dismissed})
+            new[fp] = c
+        self._conflicts = new
+
+    def replace_repairs(
+        self,
+        repairs: Sequence[GraphRepairSuggestion],
+        *,
+        dismissed_fingerprints: set[str] | None = None,
+    ) -> None:
+        dismissed = dismissed_fingerprints or set()
+        new: dict[str, GraphRepairSuggestion] = {}
+        for r in repairs:
+            fp = r.fingerprint
+            prev = self._repairs.get(fp)
+            if prev is not None and prev.status != SuggestionStatus.open:
+                r = r.model_copy(update={"status": prev.status})
+            elif fp in dismissed:
+                r = r.model_copy(update={"status": SuggestionStatus.dismissed})
+            new[fp] = r
+        self._repairs = new
+
+    def replace_reminders(self, reminders: Sequence[Reminder]) -> None:
+        self._reminders = {r.fingerprint: r for r in reminders}
+
+    def changes(self) -> list[Change]:
+        return list(self._changes.values())
+
+    def conflicts(self) -> list[ConflictSuggestion]:
+        return list(self._conflicts.values())
+
+    def repairs(self) -> list[GraphRepairSuggestion]:
+        return list(self._repairs.values())
+
+    def reminders(self) -> list[Reminder]:
+        return list(self._reminders.values())
