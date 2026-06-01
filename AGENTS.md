@@ -176,7 +176,13 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   idempotent; property-tested), `whodex sync --write-back` + echo suppression. 405 tests, gate green.
   Dedicated review caught + fixed a vacuous echo-suppression test and an empty/scalar-`whodex.uid`
   non-convergence bug. *Deferred:* `watchdog` daemon watch (1g), applying graph repairs to the vault.
-- **Phase 1 next (per master plan order):** 1f ingestion API (FastAPI) → 1e Google → 1g TUI →
+- **Phase 1f — Ingestion API + tokens + LinkedIn-ext: COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1f-ingestion-api.md`) — revocable bearer tokens (hash-only) +
+  `whodex token issue`, FastAPI `create_app`/`POST /ingest` (202, token-gated, shared `ingest_one`/
+  `reproject_and_persist` pipeline — no divergent path), `linkedin_ext` PUSH source. 458 tests, gate green,
+  97% cov. A1–A6 (auth/ingest/idempotent/422) via TestClient over a durable app. *Deferred:* serving the
+  app (`whodex serve` in 1g), webhook/RSS, TLS.
+- **Phase 1 next (per master plan order):** 1e Google Contacts (OAuth) → 1g TUI + serve + notifiers →
   1h Firefox. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
