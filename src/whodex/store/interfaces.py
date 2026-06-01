@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Protocol
+
+from whodex.domain.events import Interaction, Observation, UserAction
+from whodex.domain.state import EntityGraphState, EventStream
+
+
+class LedgerStore(Protocol):
+    def append_observations(self, observations: Sequence[Observation]) -> None: ...
+    def append_interactions(self, interactions: Sequence[Interaction]) -> None: ...
+    def append_user_actions(self, actions: Sequence[UserAction]) -> None: ...
+    def read_events(self) -> EventStream: ...
+
+
+class ProjectionStore(Protocol):
+    def save(self, states: EntityGraphState) -> None: ...
+    def load(self) -> EntityGraphState: ...
