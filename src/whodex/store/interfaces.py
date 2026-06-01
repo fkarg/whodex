@@ -16,7 +16,7 @@ from whodex.domain.state import (
     Reminder,
     VaultFileState,
 )
-from whodex.store.rows import EntityRow
+from whodex.store.rows import EntityRow, TokenRow
 
 
 class LedgerStore(Protocol):
@@ -69,6 +69,30 @@ class VaultStateStore(Protocol):
     def put(self, state: VaultFileState) -> None: ...
 
     def all(self) -> list[VaultFileState]: ...
+
+
+class TokenStore(Protocol):
+    """Store for revocable API bearer tokens.
+
+    Plaintext is NEVER persisted; only the SHA-256 hash is stored.
+    The caller is responsible for generating and displaying the plaintext once.
+    """
+
+    def issue(self, label: str, *, token: str, created_at: datetime) -> str:
+        """Hash *token* and store a new row with *label*.  Returns the new token id."""
+        ...
+
+    def validate(self, token: str) -> bool:
+        """Return True iff hash_token(*token*) matches a non-revoked row."""
+        ...
+
+    def revoke(self, token_id: str) -> None:
+        """Mark the row identified by *token_id* as revoked."""
+        ...
+
+    def list_tokens(self) -> list[TokenRow]:
+        """Return all token rows (id, label, created_at, revoked; hash included)."""
+        ...
 
 
 class DerivedStore(Protocol):

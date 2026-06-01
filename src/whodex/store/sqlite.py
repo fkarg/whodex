@@ -24,6 +24,7 @@ from whodex.domain.state import (
     Reminder,
     VaultFileState,
 )
+from whodex.domain.tokens import hash_token
 from whodex.store import mappers
 from whodex.store.rows import (
     ChangeRow,
@@ -36,6 +37,7 @@ from whodex.store.rows import (
     ObservationRow,
     ProjectionStateRow,
     ReminderRow,
+    TokenRow,
     UserActionRow,
     VaultFileStateRow,
 )
@@ -408,3 +410,53 @@ class SqliteVaultStateStore:
         with Session(self._engine) as s:
             rows = s.exec(select(VaultFileStateRow)).all()
         return [mappers.row_to_vault_state(r) for r in rows]
+
+
+class SqliteTokenStore:
+    """SQLite-backed TokenStore.  Only the SHA-256 hash of each token is persisted."""
+
+    def __init__(self, url: str = "sqlite://", *, id_factory: IdFactory) -> None:
+        self._id_factory = id_factory
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def issue(self, label: str, *, token: str, created_at: datetime) -> str:
+        token_id = self._id_factory.new()
+        row = TokenRow(
+            id=token_id,
+            token_hash=hash_token(token),
+            label=label,
+            created_at=created_at,
+            revoked=False,
+        )
+        with Session(self._engine) as s:
+            s.add(row)
+            s.commit()
+        return token_id
+
+    def validate(self, token: str) -> bool:
+        h = hash_token(token)
+        with Session(self._engine) as s:
+            stmt = select(TokenRow).where(
+                TokenRow.token_hash == h,
+                TokenRow.revoked == False,  # noqa: E712
+            )
+            row = s.exec(stmt).first()
+        return row is not None
+
+    def revoke(self, token_id: str) -> None:
+        with Session(self._engine) as s:
+            row = s.get(TokenRow, token_id)
+            if row is not None:
+                row.revoked = True
+                s.add(row)
+                s.commit()
+
+    def list_tokens(self) -> list[TokenRow]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(TokenRow)).all()
+        return list(rows)

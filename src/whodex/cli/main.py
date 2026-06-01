@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -11,6 +13,9 @@ from whodex.engine.scoring import ScoringConfig
 from whodex.sync.engine import run_sync
 
 app = typer.Typer(help="whodex — local-first people CRM")
+
+token_app = typer.Typer(help="Manage API bearer tokens.")
+app.add_typer(token_app, name="token")
 
 
 @app.command()
@@ -138,3 +143,16 @@ def who_at(
         state = projection.get(pid)
         display = (state.display_name if state is not None else None) or pid
         typer.echo(display)
+
+
+@token_app.command(name="issue")
+def token_issue(
+    label: str = typer.Option(..., "--label", help="Human-readable label for this token."),
+    db: Path | None = typer.Option(None, "--db", help="Path to SQLite database file."),
+) -> None:
+    """Generate a new revocable bearer token and print it once."""
+    wiring = build_app(db=db)
+    plaintext = secrets.token_urlsafe(32)
+    wiring.tokens.issue(label, token=plaintext, created_at=datetime.now(UTC))
+    typer.echo(plaintext)
+    typer.echo("Store this token now — it will not be shown again.")

@@ -149,3 +149,12 @@ class ReminderRow(SQLModel, table=True):
     score: float
     why: Any = Field(default=None, sa_column=Column(JSON))
     created_at: datetime
+
+
+class TokenRow(SQLModel, table=True):
+    __tablename__ = "token"
+    id: str = Field(primary_key=True)
+    token_hash: str = Field(index=True)
+    label: str
+    created_at: datetime
+    revoked: bool = False

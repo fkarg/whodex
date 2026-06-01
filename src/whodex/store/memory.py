@@ -17,7 +17,8 @@ from whodex.domain.state import (
     Reminder,
     VaultFileState,
 )
-from whodex.store.rows import EntityRow
+from whodex.domain.tokens import hash_token
+from whodex.store.rows import EntityRow, TokenRow
 
 
 class InMemoryLedgerStore:
@@ -226,3 +227,34 @@ class InMemoryDerivedStore:
 
     def reminders(self) -> list[Reminder]:
         return list(self._reminders.values())
+
+
+class InMemoryTokenStore:
+    """In-memory TokenStore.  Only the SHA-256 hash of each token is kept."""
+
+    def __init__(self, id_factory: IdFactory) -> None:
+        self._id_factory = id_factory
+        self._rows: dict[str, TokenRow] = {}  # token_id -> TokenRow
+
+    def issue(self, label: str, *, token: str, created_at: datetime) -> str:
+        token_id = self._id_factory.new()
+        self._rows[token_id] = TokenRow(
+            id=token_id,
+            token_hash=hash_token(token),
+            label=label,
+            created_at=created_at,
+            revoked=False,
+        )
+        return token_id
+
+    def validate(self, token: str) -> bool:
+        h = hash_token(token)
+        return any(r.token_hash == h and not r.revoked for r in self._rows.values())
+
+    def revoke(self, token_id: str) -> None:
+        row = self._rows.get(token_id)
+        if row is not None:
+            self._rows[token_id] = row.model_copy(update={"revoked": True})
+
+    def list_tokens(self) -> list[TokenRow]:
+        return list(self._rows.values())

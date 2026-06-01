@@ -16,6 +16,7 @@ from whodex.store.interfaces import (
     EntityStore,
     LedgerStore,
     ProjectionStore,
+    TokenStore,
     VaultStateStore,
 )
 from whodex.store.memory import (
@@ -24,6 +25,7 @@ from whodex.store.memory import (
     InMemoryEntityStore,
     InMemoryLedgerStore,
     InMemoryProjectionStore,
+    InMemoryTokenStore,
     InMemoryVaultStateStore,
 )
 from whodex.sync.hub import IngestionHub, StoreIdentityResolver
@@ -41,6 +43,7 @@ class App:
     trust: dict[str, int]
     clock: Clock
     vault_state_store: VaultStateStore  # per-file vault tracking (echo suppression)
+    tokens: TokenStore  # revocable bearer tokens
 
 
 def build_app(
@@ -61,6 +64,7 @@ def build_app(
     edge_store: EdgeStore
     derived_store: DerivedStore
     vault_state_store: VaultStateStore
+    token_store: TokenStore
 
     if db is not None:
         # Durable SQLite path
@@ -70,6 +74,7 @@ def build_app(
             SqliteEntityStore,
             SqliteLedgerStore,
             SqliteProjectionStore,
+            SqliteTokenStore,
             SqliteVaultStateStore,
         )
 
@@ -81,6 +86,7 @@ def build_app(
         edge_store = SqliteEdgeStore(url)
         derived_store = SqliteDerivedStore(url)
         vault_state_store = SqliteVaultStateStore(url)
+        token_store = SqliteTokenStore(url, id_factory=UlidIdFactory())
     else:
         # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
@@ -89,6 +95,7 @@ def build_app(
         edge_store = InMemoryEdgeStore()
         derived_store = InMemoryDerivedStore()
         vault_state_store = InMemoryVaultStateStore()
+        token_store = InMemoryTokenStore(id_factory=UlidIdFactory())
 
     identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
     hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
@@ -123,4 +130,5 @@ def build_app(
         trust=dict(DEFAULT_TRUST),
         clock=clock,
         vault_state_store=vault_state_store,
+        tokens=token_store,
     )
