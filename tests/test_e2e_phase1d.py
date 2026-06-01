@@ -30,7 +30,7 @@ import pytest
 from whodex.config.settings import build_app
 from whodex.domain.events import RawRecord
 from whodex.sources.fake import FakeSource
-from whodex.sync.engine import run_sync
+from whodex.sync.engine import SyncReport, run_sync
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -110,6 +110,36 @@ def _run_sync_with_writeback(vault: Path, fake: FakeSource) -> tuple[object, obj
         write_back=True,
     )
     return report, app
+
+
+def _run_two_syncs_shared_state(
+    vault: Path, fake: FakeSource, db: Path
+) -> tuple[SyncReport, SyncReport]:
+    """Run two consecutive write-back syncs sharing durable state via SQLite.
+
+    Returns (report1, report2) where both reuse the same App (ledger, vault_state_store, etc.).
+    This is the correct model for testing echo suppression: without shared state the
+    vault_state_store is reset on every build_app call, making the skip branch unreachable.
+    """
+    app = build_app(vault=vault, db=db)
+    sources = list(app.sources) + [fake]
+
+    def _sync() -> SyncReport:
+        return run_sync(
+            sources,
+            ledger=app.ledger,
+            projection=app.projection,
+            hub=app.hub,
+            trust=app.trust,
+            now=NOW,
+            entities=app.entities,
+            vault_state_store=app.vault_state_store,
+            write_back=True,
+        )
+
+    report1 = _sync()
+    report2 = _sync()
+    return report1, report2
 
 
 def _parse_frontmatter(text: str) -> dict[str, object]:
@@ -313,25 +343,29 @@ def test_w5_uid_written_once_and_stable(tmp_path: Path) -> None:
 
 @pytest.mark.e2e
 def test_w4_echo_suppression_no_changes_on_second_sync(tmp_path: Path) -> None:
-    """W4: the second write-back sync reports changes == 0 and does not re-ingest.
+    """W4: echo suppression — second sync ingests fewer observations than the first.
 
-    After the first write-back, the vault state store records the written hash.
-    On the second sync the ObsidianSource must skip that file (echo suppression),
-    so the engine sees no new observations from Ada's note → changes == 0 in the
-    SyncReport (projected state is unchanged).
+    The first sync writes Ada's note (whodex.uid + job_title) and records the
+    written hash in the vault_state_store.  On the second sync ObsidianSource
+    MUST skip Ada's file (echo suppression), contributing zero observations for
+    that file.  We detect this as a strict DROP in observations_ingested: the
+    enrichment FakeSource emits the same count both times, but the obsidian echo
+    of Ada's note only appears on sync 1.
+
+    State is shared across both syncs via SQLite (durable vault_state_store).
+    Without shared state the skip branch is never reachable, making the test vacuous.
     """
     vault = _copy_vault(tmp_path)
     _add_email_to_ada(vault)
     fake = _make_fake_source()
+    db = tmp_path / "db.sqlite"
 
-    # First write-back sync (populates vault_state_store)
-    _run_sync_with_writeback(vault, fake)
+    report1, report2 = _run_two_syncs_shared_state(vault, fake, db)
 
-    # Second write-back sync — Ada's file was written by whodex, echo suppressed
-    report2, _ = _run_sync_with_writeback(vault, fake)
-
-    assert report2.changes == 0, (
-        f"W4 FAIL (echo suppression): second write-back sync reported changes={report2.changes} "
-        "instead of 0. The written file was re-ingested as a new observation, "
-        "causing a spurious change."
+    assert report2.observations_ingested < report1.observations_ingested, (
+        f"W4 FAIL (echo suppression non-vacuous): "
+        f"sync2 ingested {report2.observations_ingested} obs, "
+        f"sync1 ingested {report1.observations_ingested} obs. "
+        "Expected a strict drop because Ada's written note must be echo-suppressed. "
+        "Check that vault_state_store is shared between syncs and the skip branch fires."
     )

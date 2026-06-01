@@ -457,3 +457,59 @@ def test_property_idempotent(present_fields: frozenset[str]) -> None:
         f"Second call was not a no-op; wrote_fields={result2.wrote_fields}, "
         f"injected_uid={result2.injected_uid}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 (W3): empty-string uid convergence
+# ---------------------------------------------------------------------------
+
+
+def test_w3_empty_uid_string_is_filled_and_converges() -> None:
+    """Fix 1: whodex:\\n  uid: '' treated as absent — first call fills, second is noop.
+
+    A note with an empty-string uid must NOT loop forever:
+    1. plan_writeback(..., uid='01ABC') → non-None new_text (fills it)
+    2. plan_writeback(new_text, ..., uid='01ABC') → new_text is None (converged)
+    """
+    raw = "---\nwhodex:\n  uid: ''\n---\nb\n"
+    result1 = plan_writeback(raw=raw, projected={}, managed_fields=[], uid="01ABC")
+    assert result1.new_text is not None, "Fix 1: first call should fill empty uid"
+    from whodex.vault.markdown import parse_note
+
+    note1 = parse_note(result1.new_text)
+    assert note1.frontmatter["whodex"]["uid"] == "01ABC", "uid must be written on first call"
+
+    result2 = plan_writeback(raw=result1.new_text, projected={}, managed_fields=[], uid="01ABC")
+    assert result2.new_text is None, (
+        "Fix 1 (W3 convergence): second plan_writeback on filled note must be None (no-op), "
+        f"got new_text={result2.new_text!r}"
+    )
+
+
+def test_w3_noop_when_uid_already_non_empty() -> None:
+    """Fix 1: a note with a non-empty uid is immediately a no-op."""
+    raw = "---\nwhodex:\n  uid: EXISTING\n---\nb\n"
+    result = plan_writeback(raw=raw, projected={}, managed_fields=[], uid="01ABC")
+    assert result.new_text is None, (
+        "Fix 1: note with existing non-empty uid must produce new_text=None"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 (Minor): scalar whodex: value does not crash uid injection
+# ---------------------------------------------------------------------------
+
+
+def test_fix2_scalar_whodex_value_replaced_with_mapping_on_uid_inject() -> None:
+    """Fix 2: whodex: junk (scalar) must not crash — uid is injected cleanly."""
+    from whodex.vault.markdown import parse_note, render_with_changes
+
+    raw = "---\nwhodex: junk\n---\nb\n"
+    out = render_with_changes(raw, {}, set_uid="01X")
+    note = parse_note(out)
+    assert isinstance(note.frontmatter.get("whodex"), dict), (
+        "Fix 2: whodex must be replaced with a mapping when uid is injected"
+    )
+    assert note.frontmatter["whodex"]["uid"] == "01X", (
+        f"Fix 2: uid not written correctly, got {note.frontmatter.get('whodex')!r}"
+    )

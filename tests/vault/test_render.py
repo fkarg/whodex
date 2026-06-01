@@ -15,6 +15,8 @@ def test_no_change_roundtrip_preserves_frontmatter_keys_and_body():
     p_in, p_out = parse_note(raw), parse_note(out)
     assert p_out.frontmatter == p_in.frontmatter
     assert p_out.body == p_in.body == "## Notes\n- x\n"
+    # Fix 4: key ORDER must also be preserved (W1)
+    assert list(p_out.frontmatter) == list(p_in.frontmatter)
 
 
 def test_applies_only_the_changed_key_and_preserves_others_and_body():

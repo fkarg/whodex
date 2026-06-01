@@ -14,9 +14,9 @@ import textwrap
 from datetime import UTC, datetime
 from pathlib import Path
 
-from whodex.config.settings import build_app
+from whodex.config.settings import App, build_app
 from whodex.domain.events import RawRecord
-from whodex.sync.engine import run_sync
+from whodex.sync.engine import SyncReport, run_sync
 
 NOW = datetime(2026, 3, 1, tzinfo=UTC)
 
@@ -36,14 +36,14 @@ def _write_note(vault: Path, rel_path: str, content: str) -> Path:
 def _sync(
     vault: Path,
     *,
-    extra_sources=None,
+    extra_sources: list[object] | None = None,
     write_back: bool = False,
-) -> tuple[object, object]:
+) -> tuple[SyncReport, App]:
     """Build an in-memory App and run sync. Returns (report, app)."""
     app = build_app(vault=vault)
     sources = list(app.sources)
     if extra_sources:
-        sources.extend(extra_sources)
+        sources.extend(extra_sources)  # type: ignore[arg-type]
     report = run_sync(
         sources,
         ledger=app.ledger,
@@ -56,6 +56,29 @@ def _sync(
         write_back=write_back,
     )
     return report, app
+
+
+def _sync_with_app(
+    app: App,
+    *,
+    extra_sources: list[object] | None = None,
+    write_back: bool = False,
+) -> SyncReport:
+    """Run sync reusing an existing App (shares ledger, vault_state_store, etc.)."""
+    sources = list(app.sources)
+    if extra_sources:
+        sources.extend(extra_sources)  # type: ignore[arg-type]
+    return run_sync(
+        sources,
+        ledger=app.ledger,
+        projection=app.projection,
+        hub=app.hub,
+        trust=app.trust,
+        now=NOW,
+        entities=app.entities,
+        vault_state_store=app.vault_state_store,
+        write_back=write_back,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +136,14 @@ def test_writeback_fills_blank_job_title(tmp_path: Path) -> None:
 def test_echo_suppression_after_writeback(tmp_path: Path) -> None:
     """W4: after write-back sync, running sync again skips the just-written file.
 
-    The second sync should see zero observations contributed by the written note
-    (it's our own echo), so report.changes == 0 and the file is byte-identical.
+    Both syncs share the SAME App (ledger + vault_state_store) so that the hash
+    recorded by write_back on sync 1 is visible to ObsidianSource.fetch on sync 2.
+    Without shared state the vault_state_store is reset on every build_app call,
+    making the skip branch unreachable and the test vacuous.
+
+    Assertion: sync2 ingests strictly fewer observations than sync1, because
+    Bob's written note is echo-suppressed (skipped) on the second pass while the
+    FakeSource record count is the same both times.
     """
     _write_note(
         vault=tmp_path,
@@ -140,27 +169,31 @@ def test_echo_suppression_after_writeback(tmp_path: Path) -> None:
         ]
     )
 
-    # First sync with write-back
-    _sync(tmp_path, extra_sources=[fake_source], write_back=True)
+    # Build ONE app that is reused across both syncs (shared state).
+    app = build_app(vault=tmp_path)
 
+    # First sync with write-back — writes Bob.md, records hash in vault_state_store.
+    report1 = _sync_with_app(app, extra_sources=[fake_source], write_back=True)
     content_after_first = (tmp_path / "People/Bob.md").read_text()
 
-    # Second sync with write-back — the obsidian source should suppress the echo
-    report2, _ = _sync(tmp_path, extra_sources=[fake_source], write_back=True)
-
+    # Second sync — Bob.md hash matches last_written_hash → echo-suppressed.
+    report2 = _sync_with_app(app, extra_sources=[fake_source], write_back=True)
     content_after_second = (tmp_path / "People/Bob.md").read_text()
 
-    # File must be byte-identical after second sync
+    # File must be byte-identical (nothing new to write).
     assert content_after_first == content_after_second, (
         "File changed on second sync — echo suppression failed.\n"
         f"After first sync:\n{content_after_first}\n"
         f"After second sync:\n{content_after_second}"
     )
 
-    # No new changes should be reported from the obsidian echo
-    assert report2.changes == 0, (
-        f"Expected 0 changes on second sync (echo suppressed), got {report2.changes}. "
-        "The written file was re-ingested as new data."
+    # Strict drop in observations_ingested: Bob's obsidian echo is suppressed.
+    assert report2.observations_ingested < report1.observations_ingested, (
+        f"W4 FAIL (echo suppression non-vacuous): "
+        f"sync2 ingested {report2.observations_ingested} obs, "
+        f"sync1 ingested {report1.observations_ingested} obs. "
+        "Expected a strict drop because Bob's written note must be echo-suppressed. "
+        "The test would pass trivially if vault_state_store were reset between syncs."
     )
 
 

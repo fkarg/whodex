@@ -163,10 +163,14 @@ def _apply_changes_to_map(
         cm["whodex"] = whodex_map
     else:
         existing_whodex = cm["whodex"]
-        if not isinstance(existing_whodex, dict) or "uid" not in existing_whodex:
-            if not isinstance(existing_whodex, CommentedMap):
-                existing_whodex = CommentedMap(existing_whodex)
-                cm["whodex"] = existing_whodex
+        # Fix 2: scalar whodex value (e.g. ``whodex: junk``) — replace wholesale.
+        if not isinstance(existing_whodex, dict):
+            fresh: CommentedMap = CommentedMap()
+            fresh["uid"] = set_uid
+            cm["whodex"] = fresh
+            return
+        # Fix 1: treat empty/falsy uid as absent so we fill it in.
+        if not existing_whodex.get("uid"):
             existing_whodex["uid"] = set_uid
 
 
