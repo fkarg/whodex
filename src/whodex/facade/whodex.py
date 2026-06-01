@@ -305,16 +305,17 @@ class Whodex:
     def log_interaction(
         self,
         entity_id: str,
-        kind: InteractionKind = InteractionKind.note,
+        kind: InteractionKind | str = InteractionKind.note,
         *,
         note: str | None = None,
         when: datetime | None = None,
     ) -> None:
         """Log an interaction with a contact and reproject."""
+        interaction_kind = InteractionKind(kind) if not isinstance(kind, InteractionKind) else kind
         occurred_at = when or self._now()
         ix = Interaction(
             id=self._new_id(),
-            kind=kind,
+            kind=interaction_kind,
             occurred_at=occurred_at,
             participant_ids=(entity_id,),
             summary=note,
