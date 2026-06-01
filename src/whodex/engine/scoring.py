@@ -4,6 +4,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from whodex.domain.enums import EntityKind, UserActionType
+from whodex.domain.state import EntityGraphState, EventStream
+
 
 class ScoreInput(BaseModel):
     entity_id: str
@@ -77,3 +80,50 @@ def score_contact(si: ScoreInput, cfg: ScoringConfig, now: datetime) -> Score:
         value = max(base, cfg.pin_floor)
         reasons.append("pinned")
     return Score(value=value, reasons=reasons)
+
+
+def _latest_interaction(entity_id: str, events: EventStream) -> datetime | None:
+    times = [i.occurred_at for i in events.interactions if entity_id in i.participant_ids]
+    return max(times) if times else None
+
+
+def _pin_and_snooze(entity_id: str, events: EventStream) -> tuple[bool, datetime | None]:
+    pinned = False
+    snoozed_until: datetime | None = None
+    for a in sorted(events.user_actions, key=lambda x: x.created_at):
+        if a.entity_id != entity_id:
+            continue
+        if a.action_type == UserActionType.pin and a.target_type == "contact":
+            pinned = True
+        elif a.action_type == UserActionType.unpin and a.target_type == "contact":
+            pinned = False
+        elif a.action_type == UserActionType.snooze:
+            raw = a.payload.get("until")
+            snoozed_until = datetime.fromisoformat(str(raw)) if raw is not None else None
+    return pinned, snoozed_until
+
+
+def build_score_inputs(
+    states: EntityGraphState, events: EventStream, *, cfg: ScoringConfig, now: datetime
+) -> list[ScoreInput]:
+    inputs: list[ScoreInput] = []
+    for entity_id, state in states.items():
+        if state.kind != EntityKind.person:
+            continue
+        tier_fv = state.fields.get("person.importance")
+        tier = str(tier_fv.value) if tier_fv and str(tier_fv.value) in cfg.tier_weight else "loose"
+        cad_fv = state.fields.get("person.cadence_days")
+        cadence_days = int(cad_fv.value) if cad_fv is not None else cfg.cadence_default[tier]
+        pinned, snoozed_until = _pin_and_snooze(entity_id, events)
+        inputs.append(
+            ScoreInput(
+                entity_id=entity_id,
+                display_name=state.display_name,
+                last_interaction_at=_latest_interaction(entity_id, events),
+                cadence_days=cadence_days,
+                tier=tier,
+                pinned=pinned,
+                snoozed_until=snoozed_until,
+            )
+        )
+    return inputs
