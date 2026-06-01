@@ -24,6 +24,11 @@ def sync(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
     vault: Path | None = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
+    write_back: bool = typer.Option(
+        False,
+        "--write-back/--no-write-back",
+        help="fill blank managed frontmatter fields from projected data (no-clobber)",
+    ),
 ) -> None:
     """Run one sync pass and print the projected state."""
     wiring = build_app(demo=demo, vault=vault, db=db)
@@ -37,6 +42,8 @@ def sync(
         entities=wiring.entities,
         edge_store=wiring.edges,
         derived_store=wiring.derived,
+        write_back=write_back,
+        vault_state_store=wiring.vault_state_store,
     )
     typer.echo(
         f"ingested={report.observations_ingested} interactions={report.interactions_ingested} "

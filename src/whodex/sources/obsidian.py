@@ -1,7 +1,12 @@
-"""Read-only Obsidian vault connector (P1b-7).
+"""Obsidian vault connector with PULL and WRITEBACK capabilities (P1b-7 / P1d-4).
 
 Scans an Obsidian vault directory, parses each markdown note, and produces
 RawRecord objects for ingestion into the hub.
+
+Write-back fills blank managed frontmatter fields (no-clobber: existing
+non-empty values are never touched).  Echo suppression prevents the
+connector from re-ingesting files that whodex itself last wrote, avoiding
+spurious change detection.
 
 NOTE (deferred): observed_at uses file mtime; git-based observed_at is a
 planned follow-up (P1b-8 or later).
@@ -17,19 +22,45 @@ from typing import Any
 
 from whodex.domain.enums import Capability, InteractionKind, ObsOp
 from whodex.domain.events import InteractionDraft, ObservationDraft, RawRecord
+from whodex.domain.state import VaultFileState, VaultStateStoreProtocol
 from whodex.sources.base import FieldSpec
 from whodex.vault.fs import scan
+from whodex.vault.hashing import content_hash
 from whodex.vault.markdown import parse_note
 from whodex.vault.routing import route
+from whodex.vault.writeback import plan_writeback
 
 __all__ = ["ObsidianSource"]
 
+# ---------------------------------------------------------------------------
+# Field maps: frontmatter key ↔ canonical field name
+# ---------------------------------------------------------------------------
+
+# Forward: frontmatter_key → canonical field (used by normalize)
+_FM_TO_CANONICAL: dict[str, str] = {
+    "job_title": "job.title",
+    "linkedin": "linkedin.url",
+    "emails": "email",
+    "phones": "phone",
+}
+
+# Reverse: canonical field → frontmatter key (used by write_back)
+_CANONICAL_TO_FM: dict[str, str] = {
+    "job.title": "job_title",
+    "linkedin.url": "linkedin",
+    "email": "emails",
+    "phone": "phones",
+}
+
+# Managed frontmatter keys whodex may fill in write-back (fill-blank only)
+_MANAGED_FIELDS: list[str] = list(_CANONICAL_TO_FM.values())
+
 
 class ObsidianSource:
-    """Read-only pull source from an Obsidian markdown vault."""
+    """Pull + write-back source from an Obsidian markdown vault."""
 
     id: str = "obsidian"
-    capabilities: Capability = Capability.PULL
+    capabilities: Capability = Capability.PULL | Capability.WRITEBACK
     identity_keys: tuple[str, ...] = ("vault_uid", "vault_path", "linkedin_url", "email")
     provides: tuple[FieldSpec, ...] = (
         FieldSpec(canonical="name.full"),
@@ -45,8 +76,14 @@ class ObsidianSource:
         FieldSpec(canonical="contact.last_at"),
     )
 
-    def __init__(self, vault_dir: Path) -> None:
+    def __init__(
+        self,
+        vault_dir: Path,
+        *,
+        state_store: VaultStateStoreProtocol | None = None,
+    ) -> None:
         self._vault_dir = vault_dir
+        self._state_store = state_store
 
     # ------------------------------------------------------------------
     # PullSource.fetch
@@ -59,6 +96,17 @@ class ObsidianSource:
             except Exception:
                 # Malformed notes are silently skipped; we never crash the sync.
                 continue
+
+            # Echo suppression: skip files that whodex last wrote itself.
+            # We hash the frontmatter text (same basis as write_back uses) and
+            # compare against the last_written_hash stored in the state store.
+            if self._state_store is not None:
+                fm_text = _frontmatter_text(vf.text)
+                current_hash = content_hash(fm_text)
+                state = self._state_store.get(vf.path)
+                if state is not None and state.last_written_hash == current_hash:
+                    # This file was last written by whodex — skip to avoid echo.
+                    continue
 
             fm = note.frontmatter
 
@@ -225,10 +273,88 @@ class ObsidianSource:
             )
         ]
 
+    # ------------------------------------------------------------------
+    # Write-back (WRITEBACK capability)
+    # ------------------------------------------------------------------
+
+    def write_back(
+        self,
+        vault_path: str,
+        projected_frontmatter: dict[str, Any],
+        *,
+        uid: str | None,
+        state_store: VaultStateStoreProtocol,
+    ) -> bool:
+        """Fill blank managed frontmatter fields in *vault_path* from *projected_frontmatter*.
+
+        No-clobber: existing non-empty values are never overwritten.
+        After writing, updates *state_store* so the next fetch can suppress the echo.
+
+        Returns True if the file was written, False if it was a no-op.
+        """
+        full_path = self._vault_dir / vault_path
+        try:
+            raw = full_path.read_text(encoding="utf-8")
+        except OSError:
+            return False
+
+        result = plan_writeback(
+            raw=raw,
+            projected=projected_frontmatter,
+            managed_fields=_MANAGED_FIELDS,
+            uid=uid,
+        )
+
+        if result.new_text is None:
+            return False
+
+        full_path.write_text(result.new_text, encoding="utf-8")
+
+        # Record state so the next fetch can suppress the echo for this file.
+        fm_text = _frontmatter_text(result.new_text)
+        written_hash = content_hash(fm_text)
+        try:
+            mtime = full_path.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+
+        note = parse_note(result.new_text)
+        state_store.put(
+            VaultFileState(
+                path=vault_path,
+                last_content_hash=written_hash,
+                last_frontmatter_seen=dict(note.frontmatter),
+                last_mtime=mtime,
+                last_written_hash=written_hash,
+            )
+        )
+        return True
+
 
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
+
+def _frontmatter_text(raw: str) -> str:
+    """Extract the YAML block between the ``---`` fences (without fence lines).
+
+    Returns the empty string when no valid frontmatter block is found.
+    This is the canonical basis for content_hash in both fetch (echo suppression)
+    and write_back — both must use the same function to keep hashes comparable.
+    """
+    if not raw.startswith("---\n"):
+        return ""
+    rest = raw[4:]
+    start = 0
+    while start < len(rest):
+        nl = rest.find("\n", start)
+        end = nl + 1 if nl != -1 else len(rest)
+        line = rest[start:end].rstrip("\n").rstrip("\r")
+        if line in ("---", "..."):
+            return rest[:start]
+        start = end
+    return ""
 
 
 def _coerce_date_str(value: Any) -> str | None:

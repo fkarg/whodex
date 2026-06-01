@@ -16,6 +16,7 @@ from whodex.store.interfaces import (
     EntityStore,
     LedgerStore,
     ProjectionStore,
+    VaultStateStore,
 )
 from whodex.store.memory import (
     InMemoryDerivedStore,
@@ -23,6 +24,7 @@ from whodex.store.memory import (
     InMemoryEntityStore,
     InMemoryLedgerStore,
     InMemoryProjectionStore,
+    InMemoryVaultStateStore,
 )
 from whodex.sync.hub import IngestionHub, StoreIdentityResolver
 
@@ -38,6 +40,7 @@ class App:
     sources: list[PullSource]
     trust: dict[str, int]
     clock: Clock
+    vault_state_store: VaultStateStore  # per-file vault tracking (echo suppression)
 
 
 def build_app(
@@ -57,6 +60,7 @@ def build_app(
 
     edge_store: EdgeStore
     derived_store: DerivedStore
+    vault_state_store: VaultStateStore
 
     if db is not None:
         # Durable SQLite path
@@ -66,6 +70,7 @@ def build_app(
             SqliteEntityStore,
             SqliteLedgerStore,
             SqliteProjectionStore,
+            SqliteVaultStateStore,
         )
 
         url = f"sqlite:///{db}"
@@ -75,6 +80,7 @@ def build_app(
         entities = SqliteEntityStore(url, id_factory=entity_ids)
         edge_store = SqliteEdgeStore(url)
         derived_store = SqliteDerivedStore(url)
+        vault_state_store = SqliteVaultStateStore(url)
     else:
         # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
@@ -82,6 +88,7 @@ def build_app(
         entities = InMemoryEntityStore(entity_ids)
         edge_store = InMemoryEdgeStore()
         derived_store = InMemoryDerivedStore()
+        vault_state_store = InMemoryVaultStateStore()
 
     identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
     hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
@@ -89,7 +96,7 @@ def build_app(
     if vault is not None:
         from whodex.sources.obsidian import ObsidianSource
 
-        sources.append(ObsidianSource(vault))
+        sources.append(ObsidianSource(vault, state_store=vault_state_store))
 
     if demo:
         sources.append(
@@ -115,4 +122,5 @@ def build_app(
         sources=sources,
         trust=dict(DEFAULT_TRUST),
         clock=clock,
+        vault_state_store=vault_state_store,
     )

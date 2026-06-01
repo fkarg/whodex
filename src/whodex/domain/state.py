@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -125,3 +125,16 @@ class VaultFileState(BaseModel):
     last_frontmatter_seen: dict[str, Any] = Field(default_factory=dict)
     last_mtime: float
     last_written_hash: str | None = None
+
+
+class VaultStateStoreProtocol(Protocol):
+    """Minimal structural protocol for VaultStateStore.
+
+    Defined in ``domain`` so that lower layers (e.g. ``sources``) can depend
+    on it without importing from ``store`` (which is a sibling layer).
+    The full ``VaultStateStore`` protocol in ``store.interfaces`` extends this.
+    """
+
+    def get(self, path: str) -> VaultFileState | None: ...
+
+    def put(self, state: VaultFileState) -> None: ...
