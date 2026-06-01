@@ -147,8 +147,16 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src 
 
 ## 8. Status
 
-**Current phase: Phase 0 COMPLETE ✅ — next up: Phase 1 (MVP).** Spec at `docs/DESIGN.md`; vault
+**Current phase: Phase 1 in progress (sequenced into increments).** Spec at `docs/DESIGN.md`; vault
 contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-walking-skeleton.md`.
+
+- **Phase 0 — Walking Skeleton: COMPLETE ✅** (ledger → projection → SQLite, `whodex sync`).
+- **Phase 1a — Engine: COMPLETE ✅** (`docs/superpowers/plans/2026-06-01-phase-1a-engine.md`) — pure
+  `score_contact`/`build_score_inputs` prioritization, `staleness` freshness, idempotent `generate_reminders`,
+  `priority_queue` + `whodex queue`. 85 tests, gate green. *Deferred:* `event_boost` wiring from persisted
+  changes, `centrality`, reminder persistence/dispatch, freshness re-check queue.
+- **Phase 1 next (suggested order):** Obsidian connector (read: vault → entities/edges/observations) →
+  Obsidian write-back (anti-clobber) → Google Contacts → ingestion API (FastAPI) → TUI → Firefox extension.
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
