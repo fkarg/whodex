@@ -94,10 +94,15 @@ def project(
                     )
                 )
 
-            # conflict suggestion (§6.5): a non-winning, materially different observation
+            # conflict suggestion (§6.5): a LOWER-TRUST source reports a materially different
+            # value from the winner.  Equal-trust losers are normal value supersession (history)
+            # and must NOT produce a conflict suggestion.
             if winner is not None:
+                win_trust = trust.get(winner.source_kind, 0)
                 win_canon = canonicalize(field, fv.value)
                 for loser in losers:
+                    if trust.get(loser.source_kind, 0) >= win_trust:
+                        continue  # equal/higher trust → supersession, not a §6.5 conflict
                     if canonicalize(field, loser.value) != win_canon:
                         seq += 1
                         fp = _conflict_fingerprint(entity_id, field, winner.id, loser)

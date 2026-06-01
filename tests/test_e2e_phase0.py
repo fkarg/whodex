@@ -61,6 +61,7 @@ def test_job_change_produces_exactly_one_change_and_none_on_rerun():
         now=datetime(2026, 2, 2, tzinfo=UTC),
     )
     assert r2.changes == 1
+    assert r2.conflicts == 0  # same-trust supersession must not produce a conflict
     assert proj.load()["E-00000001"].fields["job.title"].value == "Staff Engineer"
 
     r3 = run_sync(
@@ -72,6 +73,7 @@ def test_job_change_produces_exactly_one_change_and_none_on_rerun():
         now=datetime(2026, 2, 3, tzinfo=UTC),
     )
     assert r3.changes == 0  # no spurious change/suggestion on re-run
+    assert r3.conflicts == 0  # no spurious conflict suggestion on re-run
 
 
 @pytest.mark.e2e

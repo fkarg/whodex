@@ -262,3 +262,54 @@ def test_conflict_suggestion_wiring_winner_and_loser_ids():
     cs = result.conflict_suggestions[0]
     assert cs.winning_observation_id == winner_obs.id
     assert cs.disagreeing_observation_id == loser_obs.id
+
+
+# ---------------------------------------------------------------------------
+# Item 5: same-trust supersession must NOT produce a conflict (DESIGN §6.5)
+# ---------------------------------------------------------------------------
+
+
+def test_same_trust_supersession_emits_no_conflict():
+    """Two observations from the same source (equal trust) at different times with different
+    values represent normal value supersession (history), not a §6.5 conflict.
+
+    The newer value wins, and conflict_suggestions must be empty.
+    The existing lower-trust case (obsidian vs linkedin_ext) must still emit a conflict.
+    """
+    # Both observations use source="fake" (trust 10 == trust 10).
+    # t5 beats t1 under the tiebreak (observed_at), so "Staff Engineer" wins.
+    stream = EventStream(
+        observations=[
+            obs(entity="E1", field="job.title", value="Engineer", source="fake", observed=_t(1)),
+            obs(
+                entity="E1",
+                field="job.title",
+                value="Staff Engineer",
+                source="fake",
+                observed=_t(5),
+            ),
+        ]
+    )
+    result = _project(stream)
+
+    # Newest value should win.
+    assert result.states["E1"].fields["job.title"].value == "Staff Engineer"
+    # No conflict — both observations carry equal trust, so this is supersession, not §6.5.
+    assert result.conflict_suggestions == []
+
+    # Sanity-check: lower-trust case still DOES emit a conflict.
+    stream2 = EventStream(
+        observations=[
+            obs(entity="E1", field="job.title", value="Truth", source="obsidian", observed=_t(1)),
+            obs(
+                entity="E1",
+                field="job.title",
+                value="Stale",
+                source="linkedin_ext",
+                observed=_t(9),
+            ),
+        ]
+    )
+    result2 = _project(stream2)
+    assert len(result2.conflict_suggestions) == 1
+    assert result2.conflict_suggestions[0].reason == "lower_trust_disagrees"
