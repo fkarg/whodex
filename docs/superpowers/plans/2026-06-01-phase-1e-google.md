@@ -33,3 +33,61 @@ A tiny `SyncTokenStore` (or reuse a small KV: store `nextSyncToken` keyed by sou
 `build_app`/config: when Google creds are present (env), add a `GoogleContacts` source (real `httpx.Client` + `GoogleTokenProvider`); absent → skip silently. `pydantic-settings` reads `WHODEX_GOOGLE_*`. e2e `tests/test_e2e_phase1e.py` (respx-mocked): a Google connections response flows through `run_sync` → person entities exist; a Google value LOSES to an Obsidian value for the same field by trust precedence (60 < 80) — assert the projected winner. Full gate + coverage. Independent gate verify before merge. Document (in the plan/AGENTS) exactly what the user must create in Google Cloud + which env vars to set.
 
 ## Self-review: no live network (respx); connector logic (mapping/pagination/sync-token/expired) fully tested; OAuth flow isolated + manual; Google data correctly loses to Obsidian/manual by trust; layering preserved.
+
+---
+
+## Google setup
+
+To enable Google Contacts sync in production, follow these steps:
+
+### 1. Google Cloud setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project (or use an existing one).
+3. Enable the **Google People API** (`people.googleapis.com`).
+4. Go to **APIs & Services → OAuth consent screen**:
+   - User type: **External** (for personal use — avoids workspace restrictions)
+   - Publishing status: **Production** (avoids the 7-day refresh-token expiry that applies to Testing-mode apps — see DESIGN O3)
+   - Add scope: `https://www.googleapis.com/auth/contacts.readonly`
+   - Add your Google account as a test user while in Testing, then publish.
+5. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
+   - Application type: **Desktop app**
+   - Download the JSON or note the **Client ID** and **Client Secret**.
+
+### 2. Obtain a refresh token
+
+Run the one-time OAuth flow (out of scope for CI — manual step):
+
+```bash
+uv run python -c "
+from google_auth_oauthlib.flow import InstalledAppFlow
+flow = InstalledAppFlow.from_client_secrets_file(
+    'client_secret.json',
+    scopes=['https://www.googleapis.com/auth/contacts.readonly'],
+)
+creds = flow.run_local_server(port=0)
+print('REFRESH TOKEN:', creds.refresh_token)
+"
+```
+
+Copy the printed refresh token.
+
+### 3. Environment variables
+
+Set these three variables in your shell / `.env` (never commit them):
+
+| Variable | Description |
+|---|---|
+| `WHODEX_GOOGLE_CLIENT_ID` | OAuth2 client ID from Google Cloud |
+| `WHODEX_GOOGLE_CLIENT_SECRET` | OAuth2 client secret |
+| `WHODEX_GOOGLE_REFRESH_TOKEN` | Long-lived refresh token from step 2 |
+
+### 4. Trust precedence
+
+Google Contacts has **trust=60** in `domain/trust.py`.  Obsidian has **trust=80** and manual/CLI has **trust=100**.  This means:
+
+- If a field (e.g. `job.title`) exists in both an Obsidian note and Google Contacts for the same person, **Obsidian wins**.
+- Google data enriches fields that are blank in higher-trust sources (email, phone, org name from the People API).
+- Conflicts between Google and Obsidian are recorded as `ConflictSuggestion` rows.
+
+When the env vars are absent, Google wiring is silently skipped — no error, no source added.

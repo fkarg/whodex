@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from whodex.store.interfaces import (
     EntityStore,
     LedgerStore,
     ProjectionStore,
+    SyncTokenStore,
     TokenStore,
     VaultStateStore,
 )
@@ -25,6 +27,7 @@ from whodex.store.memory import (
     InMemoryEntityStore,
     InMemoryLedgerStore,
     InMemoryProjectionStore,
+    InMemorySyncTokenStore,
     InMemoryTokenStore,
     InMemoryVaultStateStore,
 )
@@ -44,6 +47,7 @@ class App:
     clock: Clock
     vault_state_store: VaultStateStore  # per-file vault tracking (echo suppression)
     tokens: TokenStore  # revocable bearer tokens
+    sync_tokens: SyncTokenStore  # sync-token persistence for pull sources (e.g. Google)
 
 
 def build_app(
@@ -53,6 +57,7 @@ def build_app(
     db: Path | None = None,
     ids: IdFactory | None = None,
     clock: Clock | None = None,
+    google_env: Mapping[str, str] | None = None,
 ) -> App:
     clock = clock or SystemClock()
     sources: list[PullSource] = []
@@ -65,6 +70,7 @@ def build_app(
     derived_store: DerivedStore
     vault_state_store: VaultStateStore
     token_store: TokenStore
+    sync_token_store: SyncTokenStore
 
     if db is not None:
         # Durable SQLite path
@@ -74,6 +80,7 @@ def build_app(
             SqliteEntityStore,
             SqliteLedgerStore,
             SqliteProjectionStore,
+            SqliteSyncTokenStore,
             SqliteTokenStore,
             SqliteVaultStateStore,
         )
@@ -87,6 +94,7 @@ def build_app(
         derived_store = SqliteDerivedStore(url)
         vault_state_store = SqliteVaultStateStore(url)
         token_store = SqliteTokenStore(url, id_factory=UlidIdFactory())
+        sync_token_store = SqliteSyncTokenStore(url)
     else:
         # In-memory path — same durable resolver over an in-memory entity store (parity)
         ledger = InMemoryLedgerStore()
@@ -96,6 +104,7 @@ def build_app(
         derived_store = InMemoryDerivedStore()
         vault_state_store = InMemoryVaultStateStore()
         token_store = InMemoryTokenStore(id_factory=UlidIdFactory())
+        sync_token_store = InMemorySyncTokenStore()
 
     identity = StoreIdentityResolver(entities, ledger, ids=UlidIdFactory(), clock=clock)
     hub = IngestionHub(ids=UlidIdFactory(), clock=clock, identity=identity)
@@ -119,6 +128,26 @@ def build_app(
             )
         )
 
+    # Optional Google Contacts wiring: only when credentials are present in google_env.
+    # When google_env is None or missing required vars, Google is silently skipped.
+    if google_env is not None:
+        import httpx
+
+        from whodex.sources.google.auth import GoogleCredentialsConfig, GoogleTokenProvider
+        from whodex.sources.google.contacts import GoogleContacts
+
+        google_config = GoogleCredentialsConfig.from_env(google_env)
+        if google_config is not None:
+            token_provider = GoogleTokenProvider(google_config)
+            sources.append(
+                GoogleContacts(
+                    http=httpx.Client(),
+                    token=token_provider.access_token,
+                    clock=clock,
+                    sync_token_store=sync_token_store,
+                )
+            )
+
     return App(
         ledger=ledger,
         projection=projection,
@@ -131,4 +160,5 @@ def build_app(
         clock=clock,
         vault_state_store=vault_state_store,
         tokens=token_store,
+        sync_tokens=sync_token_store,
     )

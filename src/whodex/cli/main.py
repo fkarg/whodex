@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,7 +37,7 @@ def sync(
     ),
 ) -> None:
     """Run one sync pass and print the projected state."""
-    wiring = build_app(demo=demo, vault=vault, db=db)
+    wiring = build_app(demo=demo, vault=vault, db=db, google_env=os.environ)
     report = run_sync(
         wiring.sources,
         ledger=wiring.ledger,
@@ -68,7 +69,7 @@ def queue(
     db: Path | None = typer.Option(None, "--db", help="path to SQLite database file"),
 ) -> None:
     """Run one sync pass, then print the ranked reach-out queue with why-now."""
-    wiring = build_app(demo=demo, vault=vault, db=db)
+    wiring = build_app(demo=demo, vault=vault, db=db, google_env=os.environ)
     run_sync(
         wiring.sources,
         ledger=wiring.ledger,
