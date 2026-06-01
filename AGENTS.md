@@ -189,8 +189,16 @@ contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-
   loses to Obsidian by trust (60<80). 505 tests, gate green, 97% cov. **User setup** (Google Cloud OAuth
   Desktop client + env vars) documented in the plan's "Google setup" section. *Deferred:* live OAuth in CI,
   delete-handling, group/photo sync.
-- **Phase 1 next (per master plan order):** 1g TUI + `serve` daemon + notification dispatch + TOML config →
-  1h Firefox extension. (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
+- **Phase 1g — Facade + notifications + TUI + serve + config: COMPLETE ✅**
+  (`docs/superpowers/plans/2026-06-01-phase-1g-tui.md`) — headless `Whodex` facade (priority_queue/
+  contact_detail/review_queue + log_interaction/pin/snooze/ack/apply_repair), `Notification` persistence +
+  `NotificationDispatcher`/`TUINotifier` (idempotent), Textual TUI (queue/detail/contact-points/review/
+  log-interaction modal), `serve_tick` + `whodex serve`, TOML+env config (`pydantic-settings`). 572 tests,
+  gate green, 94% cov. Full CLI: `sync`/`queue`/`who-at`/`serve`/`tui`/`token`. *Deferred/known:* scoring &
+  freshness config knobs parsed but not yet threaded into the queue (stashed on `App`); Telegram/email sinks
+  (Phase 2); FastAPI mount + watchdog in `serve`; TUI snapshot tests (Pilot-only for now).
+- **Phase 1 next:** 1h Firefox WebExtension (MV3, manual/E2E — outside Python CI).
+  (`docs/superpowers/plans/2026-06-01-phase-1-overview.md`.)
 
 **Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
 62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
