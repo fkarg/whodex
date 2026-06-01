@@ -26,6 +26,7 @@ FIELDS: dict[str, FieldDef] = dict(
     [
         # shared person atoms (flat paths)
         _f("name.full", FieldKind.SCALAR),
+        _f("aliases", FieldKind.MULTI),  # display name aliases (added in P1b-7)
         _f("email", FieldKind.MULTI),
         _f("phone", FieldKind.MULTI),
         _f("linkedin.url", FieldKind.SCALAR),

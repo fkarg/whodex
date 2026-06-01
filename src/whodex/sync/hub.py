@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from whodex.domain.canonical import value_hash
 from whodex.domain.clock import Clock
 from whodex.domain.enums import EntityKind, UserActionType
-from whodex.domain.events import Observation, ObservationDraft, RawRecord, UserAction
+from whodex.domain.events import Interaction, Observation, ObservationDraft, RawRecord, UserAction
 from whodex.domain.fields import is_valid_field
 from whodex.domain.ids import IdFactory
 from whodex.sources.base import Source
@@ -114,6 +114,7 @@ class StoreIdentityResolver:
 class IngestResult:
     entity_id: str
     observations: list[Observation] = field(default_factory=list)
+    interactions: list[Interaction] = field(default_factory=list)
 
 
 class IngestionHub:
@@ -171,4 +172,22 @@ class IngestionHub:
             )
             for d in source.normalize(record)
         ]
-        return IngestResult(entity_id=entity_id, observations=obs)
+
+        # Interactions: finalize any InteractionDrafts from sources that expose them.
+        interactions: list[Interaction] = []
+        interactions_fn = getattr(source, "interactions", None)
+        if interactions_fn is not None:
+            for draft in interactions_fn(record):
+                interactions.append(
+                    Interaction(
+                        id=self._ids.new(),
+                        kind=draft.kind,
+                        occurred_at=draft.occurred_at,
+                        participant_ids=(entity_id,),
+                        summary=draft.summary,
+                        source_run_id=source_run_id,
+                        created_at=self._clock.now(),
+                    )
+                )
+
+        return IngestResult(entity_id=entity_id, observations=obs, interactions=interactions)

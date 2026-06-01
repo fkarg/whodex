@@ -7,6 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from whodex.domain.enums import InteractionKind, ObsOp, UserActionType
 
+__all__ = [
+    "RawRecord",
+    "ObservationDraft",
+    "Observation",
+    "InteractionDraft",
+    "Interaction",
+    "UserAction",
+]
+
 _FROZEN = ConfigDict(frozen=True)
 
 
@@ -47,6 +56,14 @@ class Observation(BaseModel):
     ingested_at: datetime
     confidence: float = 1.0
     raw_ref: str | None = None
+
+
+class InteractionDraft(BaseModel):
+    """Connector output for an interaction; the hub finalizes into a persisted Interaction."""
+
+    kind: InteractionKind
+    occurred_at: datetime
+    summary: str | None = None
 
 
 class Interaction(BaseModel):
