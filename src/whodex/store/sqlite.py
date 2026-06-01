@@ -10,13 +10,14 @@ from whodex.domain.enums import EntityKind
 from whodex.domain.events import Interaction, Observation, UserAction
 from whodex.domain.identity import normalize_identifier
 from whodex.domain.ids import IdFactory
-from whodex.domain.state import EventStream
+from whodex.domain.state import EntityGraphState, EntityState, EventStream
 from whodex.store import mappers
 from whodex.store.rows import (
     EntityIdentifierRow,
     EntityRow,
     InteractionRow,
     ObservationRow,
+    ProjectionStateRow,
     UserActionRow,
 )
 
@@ -125,3 +126,30 @@ class SqliteEntityStore:
             if row is None:
                 return None
             return mappers.restore_entity_row(row)
+
+
+class SqliteProjectionStore:
+    """SQLite-backed ProjectionStore. Each save() is a full snapshot (not an accumulation)."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def save(self, states: EntityGraphState) -> None:
+        with Session(self._engine) as s:
+            # Delete all existing rows, then insert the new snapshot.
+            existing = s.exec(select(ProjectionStateRow)).all()
+            for row in existing:
+                s.delete(row)
+            for entity_id, entity_state in states.items():
+                s.add(ProjectionStateRow(entity_id=entity_id, state_json=entity_state.model_dump_json()))
+            s.commit()
+
+    def load(self) -> EntityGraphState:
+        with Session(self._engine) as s:
+            rows = s.exec(select(ProjectionStateRow)).all()
+        return {row.entity_id: EntityState.model_validate_json(row.state_json) for row in rows}

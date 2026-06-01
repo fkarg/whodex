@@ -67,3 +67,9 @@ class EntityIdentifierRow(SQLModel, table=True):
     entity_id: str = Field(index=True)
     kind: str
     value: str
+
+
+class ProjectionStateRow(SQLModel, table=True):
+    __tablename__ = "projection_state"
+    entity_id: str = Field(primary_key=True)
+    state_json: str
