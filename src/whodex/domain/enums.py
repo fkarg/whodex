@@ -72,3 +72,16 @@ class Capability(Flag):
     PUSH = auto()
     WRITEBACK = auto()
     WATCH = auto()
+
+
+class ReminderReason(StrEnum):
+    cadence_lapsed = "cadence_lapsed"
+    data_stale = "data_stale"
+    change_detected = "change_detected"
+    manual = "manual"
+
+
+class Staleness(StrEnum):
+    fresh = "fresh"
+    stale = "stale"
+    expired = "expired"

@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from whodex.domain.enums import EdgeType, EntityKind, Significance
+from whodex.domain.enums import EdgeType, EntityKind, ReminderReason, Significance
 from whodex.domain.events import Interaction, Observation, UserAction
 
 
@@ -53,6 +53,17 @@ class ConflictSuggestion(BaseModel):
     reason: str
     fingerprint: str
     detected_at: datetime
+
+
+class Reminder(BaseModel):
+    id: str
+    entity_id: str
+    due_at: datetime
+    reason: ReminderReason
+    fingerprint: str  # hash of (entity, sorted reasons) — anti-spam dedup key
+    score: float
+    why: list[str]
+    created_at: datetime
 
 
 class GraphRepairSuggestion(BaseModel):  # seam only in Phase 0
