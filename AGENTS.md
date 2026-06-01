@@ -147,22 +147,28 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src 
 
 ## 8. Status
 
-**Current phase: pre-implementation (design done; Phase 0 plan ready).** Spec at `docs/DESIGN.md`;
-vault contract locked and strengthened against the real `people-network` templates (§9). Phase 0
-implementation plan: `docs/superpowers/plans/2026-06-01-phase-0-walking-skeleton.md` (16 TDD tasks).
+**Current phase: Phase 0 COMPLETE ✅ — next up: Phase 1 (MVP).** Spec at `docs/DESIGN.md`; vault
+contract locked (§9). Phase 0 plan: `docs/superpowers/plans/2026-06-01-phase-0-walking-skeleton.md`.
 
-**Phase 0 — Walking Skeleton (next):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
-- [ ] Repo scaffolding: `uv`/`hatchling`, `src/` layout, `ruff`/`mypy --strict`/`import-linter`, CI green
-- [ ] `domain`: `Entity`/`EntityRef`, events (`Observation`/`ObservationDraft`/`Interaction`/`UserAction`),
-      `EntityState`/`ContactProfileState`, `FieldState`, `Change`, `ConflictSuggestion`,
-      `GraphRepairSuggestion`, `Clock`/`FixedClock`, `IdFactory`, `fields.py` (~20)
-- [ ] `projection.project()` — pure fold + §6 comparator + change/conflict/graph-repair detection
-- [ ] `store`: in-memory + SQLite behind one interface (recompute-on-read)
-- [ ] `sources.base`: `Source`/`Capability` protocol + `apply_map` + `FakeSource`
-- [ ] `sync.run_sync` wiring FakeSource → hub → ledger → projection
-- [ ] `cli`: `whodex sync` prints projected state
-- [ ] test DSL `obs()/interaction()/action()` + L1 projection tests + `SourceContract` skeleton
-- **Done when:** `sync` is idempotent (10× ⇒ ≤1 change), SQLite ≡ in-memory, all gates green.
+**Phase 0 — Walking Skeleton (done):** fake source → ledger → projection → SQLite, end-to-end, fully tested.
+62 tests passing; `ruff`/`mypy --strict`/`import-linter` all green; 94% coverage. `uv run whodex sync --demo` works.
+- [x] Repo scaffolding: `uv`/`hatchling`, `src/` layout, `ruff`/`mypy --strict`/`import-linter`, CI
+- [x] `domain`: `EntityRef`, events (`Observation`/`ObservationDraft`/`Interaction`/`UserAction`),
+      `EntityState`/`ContactProfileState`, `Change`, `ConflictSuggestion`, `GraphRepairSuggestion` (seam),
+      `Clock`/`FixedClock`, `IdFactory`, `fields.py` (22 fields), `DEFAULT_TRUST`
+- [x] `projection`: precedence comparator + pure `project()` fold + change (§6.4) + conflict (§6.5, gated on
+      strictly-lower-trust) detection
+- [x] `store`: in-memory + SQLite behind one `LedgerStore` contract (recompute-on-read)
+- [x] `sources.base`: `Source`/`PullSource` protocol + `apply_map` + `FakeSource` + `SourceContract` suite
+- [x] `sync`: `IngestionHub`+`IdentityResolver`, `run_sync` wiring FakeSource → hub → ledger → projection
+- [x] `config` composition root + `cli`: `whodex sync` prints projected state
+- [x] test DSL `obs()/interaction()/action()/raw()`; L1 projection tests; e2e acceptance
+- **Done when (met):** `sync` idempotent (re-run ⇒ 0 changes/conflicts), SQLite ≡ in-memory, all gates green.
+
+**Phase 0 deferred to Phase 1 (seams present):** edge projection + graph-repair rules; JSONL ledger mirror.
+**Phase 1 follow-ups flagged in final review:** strengthen store contract to exercise interaction/user-action
+mappers (currently 56% cover); assert full `EntityState` parity in the SQLite≡memory e2e; make `ConflictSuggestion.reason`
+an enum; cover/justify the CLI `version` command.
 
 (Phase 1+ deliverables: DESIGN §13.)
 
