@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
@@ -107,13 +108,17 @@ class SqliteEntityStore:
         with Session(self._engine) as s:
             for kind, value in pairs:
                 normalised = normalize_identifier(kind, value)
-                row = EntityIdentifierRow(
-                    id=self._id_factory.new(),
-                    entity_id=entity_id,
-                    kind=kind,
-                    value=normalised,
+                stmt = (
+                    sqlite_insert(EntityIdentifierRow)
+                    .values(
+                        id=self._id_factory.new(),
+                        entity_id=entity_id,
+                        kind=kind,
+                        value=normalised,
+                    )
+                    .on_conflict_do_nothing(index_elements=["kind", "value"])
                 )
-                s.add(row)
+                s.exec(stmt)  # type: ignore[call-overload]
             s.commit()
 
     def find_by_identifiers(self, pairs: Sequence[tuple[str, str]]) -> str | None:

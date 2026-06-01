@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Optional
+
 import typer
 
 from whodex.config.settings import build_app
@@ -19,9 +22,11 @@ def version() -> None:
 @app.command()
 def sync(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
+    vault: Optional[Path] = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Optional[Path] = typer.Option(None, "--db", help="path to SQLite database file"),
 ) -> None:
     """Run one sync pass and print the projected state."""
-    wiring = build_app(demo=demo)
+    wiring = build_app(demo=demo, vault=vault, db=db)
     report = run_sync(
         wiring.sources,
         ledger=wiring.ledger,
@@ -31,8 +36,8 @@ def sync(
         now=wiring.clock.now(),
     )
     typer.echo(
-        f"ingested={report.observations_ingested} changes={report.changes} "
-        f"conflicts={report.conflicts}"
+        f"ingested={report.observations_ingested} interactions={report.interactions_ingested} "
+        f"changes={report.changes} conflicts={report.conflicts}"
     )
     for eid, state in wiring.projection.load().items():
         typer.echo(f"- {state.display_name or eid} ({state.kind.value})")
@@ -43,9 +48,11 @@ def sync(
 @app.command()
 def queue(
     demo: bool = typer.Option(False, "--demo", help="run with a built-in demo source"),
+    vault: Optional[Path] = typer.Option(None, "--vault", help="path to Obsidian vault directory"),
+    db: Optional[Path] = typer.Option(None, "--db", help="path to SQLite database file"),
 ) -> None:
     """Run one sync pass, then print the ranked reach-out queue with why-now."""
-    wiring = build_app(demo=demo)
+    wiring = build_app(demo=demo, vault=vault, db=db)
     run_sync(
         wiring.sources,
         ledger=wiring.ledger,

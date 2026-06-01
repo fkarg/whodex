@@ -13,6 +13,7 @@ from whodex.sync.hub import IngestionHub
 @dataclass
 class SyncReport:
     observations_ingested: int = 0
+    interactions_ingested: int = 0
     changes: int = 0
     conflicts: int = 0
 
@@ -33,6 +34,9 @@ def run_sync(
             result = hub.ingest(source, record, source_run_id=run_id)
             ledger.append_observations(result.observations)
             report.observations_ingested += len(result.observations)
+            if result.interactions:
+                ledger.append_interactions(result.interactions)
+                report.interactions_ingested += len(result.interactions)
 
     prev = projection.load()
     events = ledger.read_events()
