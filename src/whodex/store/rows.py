@@ -164,3 +164,15 @@ class SyncTokenRow(SQLModel, table=True):
     __tablename__ = "sync_token"
     source_id: str = Field(primary_key=True)
     token: str
+
+
+class NotificationRow(SQLModel, table=True):
+    __tablename__ = "notification"
+    id: str = Field(primary_key=True)
+    kind: str
+    entity_id: str = Field(index=True)
+    payload: Any = Field(default=None, sa_column=Column(JSON))
+    dedupe_key: str = Field(index=True, unique=True)
+    created_at: datetime
+    delivered_to: Any = Field(default=None, sa_column=Column(JSON))  # list[str] as JSON
+    state: str = "pending"

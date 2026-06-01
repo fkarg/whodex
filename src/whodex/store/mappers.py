@@ -18,6 +18,7 @@ from whodex.domain.state import (
     ConflictSuggestion,
     Edge,
     GraphRepairSuggestion,
+    Notification,
     Reminder,
     VaultFileState,
 )
@@ -28,6 +29,7 @@ from whodex.store.rows import (
     EntityRow,
     GraphRepairSuggestionRow,
     InteractionRow,
+    NotificationRow,
     ObservationRow,
     ReminderRow,
     UserActionRow,
@@ -217,4 +219,30 @@ def row_to_vault_state(r: VaultFileStateRow) -> VaultFileState:
         last_frontmatter_seen=r.last_frontmatter_seen or {},
         last_mtime=r.last_mtime,
         last_written_hash=r.last_written_hash,
+    )
+
+
+def notification_to_row(n: Notification) -> NotificationRow:
+    return NotificationRow(
+        id=n.id,
+        kind=n.kind,
+        entity_id=n.entity_id,
+        payload=n.payload,
+        dedupe_key=n.dedupe_key,
+        created_at=n.created_at,
+        delivered_to=list(n.delivered_to),
+        state=n.state,
+    )
+
+
+def row_to_notification(r: NotificationRow) -> Notification:
+    return Notification(
+        id=r.id,
+        kind=r.kind,
+        entity_id=r.entity_id,
+        payload=r.payload or {},
+        dedupe_key=r.dedupe_key,
+        created_at=_utc(r.created_at),
+        delivered_to=list(r.delivered_to or []),
+        state=r.state,
     )

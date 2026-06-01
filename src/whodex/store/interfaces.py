@@ -13,6 +13,7 @@ from whodex.domain.state import (
     EntityGraphState,
     EventStream,
     GraphRepairSuggestion,
+    Notification,
     Reminder,
     VaultFileState,
 )
@@ -108,6 +109,26 @@ class SyncTokenStore(Protocol):
 
     def clear(self, source_id: str) -> None:
         """Remove the token for *source_id* (no-op if absent)."""
+        ...
+
+
+class NotificationStore(Protocol):
+    """Append-only store for notifications; dedupe by dedupe_key."""
+
+    def append(self, notifications: Sequence[Notification]) -> None:
+        """Append notifications; silently skip any whose dedupe_key already exists."""
+        ...
+
+    def pending(self) -> list[Notification]:
+        """Return all notifications with state == 'pending'."""
+        ...
+
+    def mark_delivered(self, notification_id: str, sink: str) -> None:
+        """Add *sink* to delivered_to for the notification identified by *notification_id*."""
+        ...
+
+    def all(self) -> list[Notification]:
+        """Return all notifications regardless of state."""
         ...
 
 

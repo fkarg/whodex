@@ -21,6 +21,7 @@ from whodex.domain.state import (
     EntityState,
     EventStream,
     GraphRepairSuggestion,
+    Notification,
     Reminder,
     VaultFileState,
 )
@@ -34,6 +35,7 @@ from whodex.store.rows import (
     EntityRow,
     GraphRepairSuggestionRow,
     InteractionRow,
+    NotificationRow,
     ObservationRow,
     ProjectionStateRow,
     ReminderRow,
@@ -448,6 +450,60 @@ class SqliteSyncTokenStore:
             if row is not None:
                 s.delete(row)
                 s.commit()
+
+
+class SqliteNotificationStore:
+    """SQLite-backed NotificationStore.  Append-only with dedupe_key uniqueness enforced by DB."""
+
+    def __init__(self, url: str = "sqlite://") -> None:
+        self._engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        SQLModel.metadata.create_all(self._engine)
+
+    def append(self, notifications: Sequence[Notification]) -> None:
+        with Session(self._engine) as s:
+            for n in notifications:
+                stmt = (
+                    sqlite_insert(NotificationRow)
+                    .values(
+                        id=n.id,
+                        kind=n.kind,
+                        entity_id=n.entity_id,
+                        payload=n.payload,
+                        dedupe_key=n.dedupe_key,
+                        created_at=n.created_at,
+                        delivered_to=list(n.delivered_to),
+                        state=n.state,
+                    )
+                    .on_conflict_do_nothing(index_elements=["dedupe_key"])
+                )
+                s.exec(stmt)
+            s.commit()
+
+    def pending(self) -> list[Notification]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(NotificationRow).where(NotificationRow.state == "pending")).all()
+        return [mappers.row_to_notification(r) for r in rows]
+
+    def mark_delivered(self, notification_id: str, sink: str) -> None:
+        with Session(self._engine) as s:
+            row = s.get(NotificationRow, notification_id)
+            if row is None:
+                return
+            delivered = list(row.delivered_to or [])
+            if sink not in delivered:
+                delivered.append(sink)
+                row.delivered_to = delivered
+                s.add(row)
+                s.commit()
+
+    def all(self) -> list[Notification]:
+        with Session(self._engine) as s:
+            rows = s.exec(select(NotificationRow)).all()
+        return [mappers.row_to_notification(r) for r in rows]
 
 
 class SqliteTokenStore:

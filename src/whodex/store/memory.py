@@ -14,6 +14,7 @@ from whodex.domain.state import (
     EntityGraphState,
     EventStream,
     GraphRepairSuggestion,
+    Notification,
     Reminder,
     VaultFileState,
 )
@@ -243,6 +244,37 @@ class InMemorySyncTokenStore:
 
     def clear(self, source_id: str) -> None:
         self._store.pop(source_id, None)
+
+
+class InMemoryNotificationStore:
+    """In-memory NotificationStore. Append-only with dedupe by dedupe_key."""
+
+    def __init__(self) -> None:
+        # ordered list; dedupe_key -> Notification for O(1) existence check
+        self._by_id: dict[str, Notification] = {}
+        self._dedupe_keys: set[str] = set()
+
+    def append(self, notifications: Sequence[Notification]) -> None:
+        for n in notifications:
+            if n.dedupe_key in self._dedupe_keys:
+                continue
+            self._dedupe_keys.add(n.dedupe_key)
+            self._by_id[n.id] = n
+
+    def pending(self) -> list[Notification]:
+        return [n for n in self._by_id.values() if n.state == "pending"]
+
+    def mark_delivered(self, notification_id: str, sink: str) -> None:
+        n = self._by_id.get(notification_id)
+        if n is None:
+            return
+        if sink not in n.delivered_to:
+            self._by_id[notification_id] = n.model_copy(
+                update={"delivered_to": [*n.delivered_to, sink]}
+            )
+
+    def all(self) -> list[Notification]:
+        return list(self._by_id.values())
 
 
 class InMemoryTokenStore:

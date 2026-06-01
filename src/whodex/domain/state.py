@@ -127,6 +127,17 @@ class VaultFileState(BaseModel):
     last_written_hash: str | None = None
 
 
+class Notification(BaseModel):
+    id: str
+    kind: str  # e.g. "change" | "reminder"
+    entity_id: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    dedupe_key: str
+    created_at: datetime
+    delivered_to: list[str] = Field(default_factory=list)  # sink names already delivered
+    state: str = "pending"
+
+
 class VaultStateStoreProtocol(Protocol):
     """Minimal structural protocol for VaultStateStore.
 
