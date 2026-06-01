@@ -212,6 +212,12 @@ O11 managed graph-repair auto-apply classes.
 
 - **TDD by default** (superpowers `test-driven-development`): red → green → refactor. Behavior tests over
   implementation; the event ledger is the fixture format.
+- **Test behavior & invariants, NOT implementation** (user directive). Confirm invariants that hold across
+  many states — idempotency (run N times == once, no dup entities/changes), replay determinism (rebuild
+  from ledger/JSONL == original), order-independence, round-trip (`parse(render(x)) == x`), identity
+  stability across runs. Prefer parametric / `hypothesis` property tests over one hardcoded example. Assert
+  through public interfaces / the facade, never internal helpers, private functions, or call counts — tests
+  must survive any behavior-preserving refactor. (Readable example tests are fine only for concrete numbers.)
 - **Don't break the dependency direction** (§5). `lint-imports` is a merge gate, not a suggestion.
 - **Never weaken the anti-clobber invariant** to make a test pass — fix the design.
 - **Commits:** conventional, scoped. **Never add a `Co-Authored-By` / AI co-author trailer** (user
