@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -206,9 +207,10 @@ class SqliteEdgeStore:
 
     def replace_edges(self, edges: Sequence[Edge]) -> None:
         with Session(self._engine) as s:
-            existing = s.exec(select(EdgeRow)).all()
-            for row in existing:
-                s.delete(row)
+            # Bulk DELETE first so the unique constraint is clear before INSERTs.
+            # Row-by-row s.delete() lets SQLAlchemy reorder operations and hit
+            # the unique constraint on the second sync; a bulk statement avoids that.
+            s.exec(sa_delete(EdgeRow))
             for e in edges:
                 s.add(mappers.edge_to_row(e))
             s.commit()
