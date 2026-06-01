@@ -5,10 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from whodex.domain.enums import Capability, EntityKind, UserActionType
-from whodex.domain.ids import IdFactory, UlidIdFactory
-from whodex.projection.edges import build_edges
-from whodex.projection.project import project
+from whodex.domain.enums import Capability, EntityKind
+from whodex.domain.ids import IdFactory
 from whodex.sources.base import PullSource
 from whodex.store.interfaces import (
     DerivedStore,
@@ -19,7 +17,7 @@ from whodex.store.interfaces import (
     VaultStateStore,
 )
 from whodex.sync.hub import IngestionHub
-from whodex.sync.resolve import make_resolver
+from whodex.sync.ingest import ingest_one, reproject_and_persist
 
 # Canonical fields that are managed by write-back (must mirror _CANONICAL_TO_FM in obsidian.py)
 _MANAGED_CANONICAL: tuple[str, ...] = ("job.title", "linkedin.url", "email", "phone")
@@ -64,57 +62,38 @@ def run_sync(
     for run_seq, source in enumerate(sources, start=1):
         run_id = f"RUN-{run_seq}"
         for record in source.fetch(None):
-            result = hub.ingest(source, record, source_run_id=run_id)
-            ledger.append_observations(result.observations)
+            result = ingest_one(source, record, hub=hub, ledger=ledger, source_run_id=run_id)
             report.observations_ingested += len(result.observations)
             if result.interactions:
-                ledger.append_interactions(result.interactions)
                 report.interactions_ingested += len(result.interactions)
             # Track vault_path for write-back: ObsidianSource puts vault_path in identity
             if "vault_path" in record.identity:
                 entity_vault_paths[result.entity_id] = record.identity["vault_path"]
 
-    prev = projection.load()
-    events = ledger.read_events()
-    proj = project(events, prev or None, trust=trust, kinds=hub.identity.kinds, now=now)
-    projection.save(proj.states)
-    report.changes = len(proj.changes)
-    report.conflicts = len(proj.conflict_suggestions)
+    changes, conflicts = reproject_and_persist(
+        ledger=ledger,
+        projection=projection,
+        hub=hub,
+        trust=trust,
+        now=now,
+        entities=entities,
+        edge_store=edge_store,
+        derived_store=derived_store,
+        ids=ids,
+    )
+    report.changes = changes
+    report.conflicts = conflicts
 
-    # --- edge projection ---
-    if edge_store is not None and entities is not None:
-        id_factory = ids or UlidIdFactory()
-        resolve = make_resolver(entities)
-        graph_edges, repairs_from_edges = build_edges(
-            events.observations, resolve=resolve, ids=id_factory, now=now
-        )
-        edge_store.replace_edges(graph_edges)
-        report.edges = len(graph_edges)
-        all_repairs = proj.graph_repairs + repairs_from_edges
-    else:
-        all_repairs = proj.graph_repairs
-
-    # --- derived row persistence ---
+    # Fill in edge/repair counts from the store state after reproject_and_persist.
+    if edge_store is not None:
+        report.edges = len(edge_store.all_edges())
     if derived_store is not None:
-        # Collect acked/dismissed fingerprints from user_actions
-        acked_fps: set[str] = set()
-        dismissed_fps: set[str] = set()
-        for a in events.user_actions:
-            if a.action_type == UserActionType.ack_change and "fingerprint" in a.payload:
-                acked_fps.add(str(a.payload["fingerprint"]))
-            elif a.action_type == UserActionType.dismiss and "fingerprint" in a.payload:
-                dismissed_fps.add(str(a.payload["fingerprint"]))
-
-        derived_store.replace_changes(proj.changes, acked_fingerprints=acked_fps)
-        derived_store.replace_conflicts(
-            proj.conflict_suggestions, dismissed_fingerprints=dismissed_fps
-        )
-        derived_store.replace_repairs(all_repairs, dismissed_fingerprints=dismissed_fps)
-        report.repairs = len(all_repairs)
+        report.repairs = len(derived_store.repairs())
 
     # --- write-back phase (opt-in) ---
     if write_back and vault_state_store is not None:
-        _run_writeback(sources, proj.states, entity_vault_paths, vault_state_store)
+        proj_states = projection.load()
+        _run_writeback(sources, proj_states, entity_vault_paths, vault_state_store)
 
     return report
 

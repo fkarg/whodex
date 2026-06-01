@@ -7,8 +7,8 @@ type = layers
 layers =
     whodex.cli
     whodex.config
-    whodex.sync
     whodex.ingestion | whodex.notifiers | whodex.tui
+    whodex.sync
     whodex.engine | whodex.projection
     whodex.store | whodex.sources
     whodex.vault
