@@ -2,7 +2,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from tests.conftest import _t, action, obs
-from whodex.domain.enums import EntityKind, UserActionType
+from whodex.domain.enums import EntityKind, Significance, UserActionType
 from whodex.domain.state import EventStream
 from whodex.domain.trust import DEFAULT_TRUST
 from whodex.projection.project import project
@@ -110,3 +110,155 @@ def test_projection_is_order_independent(values):
         forward.states["E1"].fields["job.title"].value
         == backward.states["E1"].fields["job.title"].value
     )
+
+
+# ---------------------------------------------------------------------------
+# Item 1: pin suppresses Change
+# ---------------------------------------------------------------------------
+
+
+def test_pin_suppresses_change():
+    """A pin flip does not emit a Change even though the displayed value differs from prev."""
+    # First projection: source gives job.title="Eng"
+    first = _project(
+        EventStream(observations=[obs(entity="E1", field="job.title", value="Eng", observed=_t(1))])
+    )
+    assert first.states["E1"].fields["job.title"].value == "Eng"
+
+    # Second projection: same source observation PLUS a pin that overrides with "Boss".
+    # The displayed value changes from "Eng" to "Boss" but it is a pin flip, not a source
+    # change, so no Change should be emitted.
+    source_obs = obs(entity="E1", field="job.title", value="Eng", observed=_t(1))
+    pin_action = action(
+        action_type=UserActionType.pin,
+        target_type="field",
+        target_id="E1:job.title",
+        entity="E1",
+        payload={"field": "job.title", "value": "Boss"},
+    )
+    stream2 = EventStream(observations=[source_obs], user_actions=[pin_action])
+    result = project(stream2, first.states, trust=DEFAULT_TRUST, kinds=KINDS, now=_t(10))
+
+    fv = result.states["E1"].fields["job.title"]
+    assert fv.value == "Boss"
+    assert fv.pinned is True
+    assert result.changes == []
+
+
+# ---------------------------------------------------------------------------
+# Item 2: unpin restores the source winner
+# ---------------------------------------------------------------------------
+
+
+def test_unpin_restores_source_winner():
+    """An unpin after a pin removes the override; the source value wins and pinned is False."""
+    source_obs = obs(entity="E1", field="job.title", value="Eng", observed=_t(1))
+    pin_action = action(
+        action_type=UserActionType.pin,
+        target_type="field",
+        target_id="E1:job.title",
+        entity="E1",
+        payload={"field": "job.title", "value": "Boss"},
+        created=_t(2),
+    )
+    unpin_action = action(
+        action_type=UserActionType.unpin,
+        target_type="field",
+        target_id="E1:job.title",
+        entity="E1",
+        payload={"field": "job.title"},
+        created=_t(3),  # later than the pin
+    )
+    stream = EventStream(
+        observations=[source_obs],
+        user_actions=[pin_action, unpin_action],
+    )
+    result = _project(stream)
+
+    fv = result.states["E1"].fields["job.title"]
+    assert fv.value == "Eng"
+    assert fv.pinned is False
+
+
+# ---------------------------------------------------------------------------
+# Item 3: multi-source conflict caps at one ConflictSuggestion per field
+# ---------------------------------------------------------------------------
+
+
+def test_three_source_conflict_caps_at_one_suggestion():
+    """Three observations with different values → exactly one ConflictSuggestion (break in loop)."""
+    # obsidian (trust 80) wins; google_contacts (60) and linkedin_ext (50) lose.
+    winner_obs = obs(
+        entity="E1", field="email", value="hi@example.com", source="obsidian", observed=_t(1)
+    )
+    loser1 = obs(
+        entity="E1",
+        field="email",
+        value="other@example.com",
+        source="google_contacts",
+        observed=_t(1),
+    )
+    loser2 = obs(
+        entity="E1",
+        field="email",
+        value="third@example.com",
+        source="linkedin_ext",
+        observed=_t(1),
+    )
+    stream = EventStream(observations=[winner_obs, loser1, loser2])
+    result = _project(stream)
+
+    assert result.states["E1"].fields["email"].value == "hi@example.com"
+    assert len(result.conflict_suggestions) == 1
+    assert result.conflict_suggestions[0].field == "email"
+
+
+# ---------------------------------------------------------------------------
+# Item 4: Change and ConflictSuggestion wiring assertions
+# ---------------------------------------------------------------------------
+
+
+def test_change_wiring_caused_by_and_significance():
+    """On a value flip the Change points at the winning observation and has correct significance."""
+    first_obs = obs(entity="E1", field="job.title", value="Eng", observed=_t(1))
+    first = project(
+        EventStream(observations=[first_obs]),
+        None,
+        trust=DEFAULT_TRUST,
+        kinds=KINDS,
+        now=_t(10),
+    )
+
+    second_obs = obs(entity="E1", field="job.title", value="Staff Eng", observed=_t(5))
+    result = project(
+        EventStream(observations=[second_obs]),
+        first.states,
+        trust=DEFAULT_TRUST,
+        kinds=KINDS,
+        now=_t(10),
+    )
+
+    assert len(result.changes) == 1
+    ch = result.changes[0]
+    # caused_by_observation must be the winning observation's id
+    assert ch.caused_by_observation == second_obs.id
+    # job.title is volatile → Significance.notable
+    assert ch.significance == Significance.notable
+
+
+def test_conflict_suggestion_wiring_winner_and_loser_ids():
+    """ConflictSuggestion.winning_observation_id and disagreeing_observation_id are correct."""
+    # obsidian (trust 80) > linkedin_ext (trust 50)
+    winner_obs = obs(
+        entity="E1", field="job.title", value="Truth", source="obsidian", observed=_t(1)
+    )
+    loser_obs = obs(
+        entity="E1", field="job.title", value="Stale", source="linkedin_ext", observed=_t(9)
+    )
+    stream = EventStream(observations=[winner_obs, loser_obs])
+    result = _project(stream)
+
+    assert len(result.conflict_suggestions) == 1
+    cs = result.conflict_suggestions[0]
+    assert cs.winning_observation_id == winner_obs.id
+    assert cs.disagreeing_observation_id == loser_obs.id

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime
 
-from whodex.domain.canonical import canonicalize, value_hash
-from whodex.domain.enums import EntityKind, ObsOp, Significance, UserActionType
+from whodex.domain.canonical import canonicalize
+from whodex.domain.enums import EntityKind, Significance, UserActionType
 from whodex.domain.events import Observation
 from whodex.domain.fields import field_def
 from whodex.domain.state import (
@@ -17,6 +18,12 @@ from whodex.domain.state import (
     ProjectionResult,
 )
 from whodex.projection.conflict import resolve_field
+
+
+def _conflict_fingerprint(entity_id: str, field: str, winner_id: str, loser: Observation) -> str:
+    """Stable, opaque fingerprint for a (winner, loser) conflict pair."""
+    key = f"{entity_id}|{field}|{winner_id}|{loser.id}|{loser.value_hash}"
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 def _pins(events: EventStream) -> dict[tuple[str, str], object]:
@@ -93,7 +100,7 @@ def project(
                 for loser in losers:
                     if canonicalize(field, loser.value) != win_canon:
                         seq += 1
-                        fp = value_hash(field, ObsOp.set, [winner.id, loser.value])
+                        fp = _conflict_fingerprint(entity_id, field, winner.id, loser)
                         result.conflict_suggestions.append(
                             ConflictSuggestion(
                                 id=f"CON-{seq:06d}",
